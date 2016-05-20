@@ -50,6 +50,11 @@ public class EddystoneItem extends BaseItem {
 
             if (EddystoneBeacon.FLAG_FRAME_EID == frameType) {
                 int timeOffset = ByteBuffer.wrap(data, 16, 4).getInt();
+
+                // sanitize time offset to match range; see UriioService.createEddystoneEIDItem
+                timeOffset = Math.min(255, Math.max(-65280, timeOffset));
+
+                // sanitize rotation exponent to [0, 15] range
                 byte rotationExponent = (byte) (data[20] & 0x0f);
                 // add time offset to current time
                 int timeCounter = (int) (System.currentTimeMillis() / 1000 + timeOffset);
