@@ -23,11 +23,15 @@ import com.uriio.beacons.api.ShortUrls;
 import com.uriio.beacons.ble.BLEAdvertiseManager;
 import com.uriio.beacons.ble.Beacon;
 import com.uriio.beacons.ble.EddystoneBeacon;
+import com.uriio.beacons.eid.EIDUtils;
+import com.uriio.beacons.eid.LocalEIDResolver;
+import com.uriio.beacons.eid.RegisterParams;
 import com.uriio.beacons.model.BaseItem;
 import com.uriio.beacons.model.EddystoneItem;
 import com.uriio.beacons.model.UriioItem;
 import com.uriio.beacons.model.iBeaconItem;
 
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -86,9 +90,9 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
 //            log("Bluetooth event state=" + state);
             if (BluetoothAdapter.STATE_TURNING_OFF == state) {
                 for (BaseItem activeItem : mActiveItems) {
-                    if (activeItem instanceof UriioItem) {
-                        mAlarmManager.cancel(((UriioItem) activeItem).getRefreshPendingIntent(UriioService.this));
-                    }
+                    // cancel refresh alarm
+                    mAlarmManager.cancel(activeItem.getRefreshPendingIntent(UriioService.this));
+
                     activeItem.setStatus(BaseItem.STATUS_NO_BLUETOOTH);
                     Beacon beacon = activeItem.getBeacon();
                     if (null != beacon) {
@@ -142,9 +146,14 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
                 case COMMAND_REFRESH:
                     for (BaseItem activeItem : mActiveItems) {
                         if (activeItem.getId() == itemId) {
+                            // fixme - move refresh call to uriio item
                             if (activeItem instanceof UriioItem) {
                                 Util.log(TAG, "Updating short url for item " + itemId);
                                 requestShortUrl((UriioItem) activeItem, 1);
+                            }
+                            else {
+                                // recreate the beacon
+                                startAdvertisingBeacon(activeItem);
                             }
                             break;
                         }
@@ -202,9 +211,7 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
         }
 
         for (BaseItem activeItem : mActiveItems) {
-            if (activeItem instanceof UriioItem) {
-                mAlarmManager.cancel(((UriioItem) activeItem).getRefreshPendingIntent(this));
-            }
+            mAlarmManager.cancel(activeItem.getRefreshPendingIntent(this));
         }
         mActiveItems.clear();
 
@@ -289,6 +296,40 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
         return item;
     }
 
+    public BaseItem createEddystoneEIDItem(byte[] publicKey, byte[] privateKey, byte rotationExponent,
+                                           int mode, int txPowerLevel, String name) throws GeneralSecurityException
+    {
+        // FIXME: 4/16/2016 - single eid resolver
+        LocalEIDResolver eidServer = new LocalEIDResolver();
+
+        RegisterParams registerParams = eidServer.queryRegistrationParams();
+
+        byte[] identityKey = EIDUtils.computeSharedKey(registerParams.publicKey, privateKey);
+
+        int now = (int) (System.currentTimeMillis() / 1000);
+        // https://github.com/google/eddystone/blob/master/eddystone-eid/eid-computation.md#implementation-guidelines
+        int timeCounter = now & ~0xffff | 65280;
+
+        // save the offset between current time and time counter so we can restore correctly
+        int timeOffset = now - timeCounter;
+
+        byte[] eid = EIDUtils.computeEID(identityKey, timeCounter, rotationExponent);
+        eidServer.registerBeacon(publicKey, rotationExponent, timeCounter, eid);
+
+        int flags = EddystoneBeacon.FLAG_EDDYSTONE;
+        flags |= EddystoneBeacon.FLAG_FRAME_EID << 4;
+
+        // serialize beacon into storage blob
+        byte[] data = new byte[21];
+        System.arraycopy(identityKey, 0, data, 0, 16);
+        ByteBuffer.wrap(data, 16, 4).putInt(timeOffset);
+        data[20] = rotationExponent;
+
+        String payload = Base64.encodeToString(data, Base64.NO_PADDING);
+
+        return createEddystoneItem(mode, txPowerLevel, flags, payload, name, null);
+    }
+
     public BaseItem createIBeaconItem(int mode, int txPowerLevel, int flags, byte[] rawUuid, int major, int minor, String name) {
         long itemId = mStorage.insertAppleBeaconItem(mode, txPowerLevel,
                 Base64.encodeToString(rawUuid, Base64.NO_PADDING), major, minor, flags, name);
@@ -313,9 +354,13 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
                     Date expireDate = shortUrl.getExpire();
                     long expireTime = null == expireDate ? 0 : expireDate.getTime();
 
+                    // update memory model
                     uriioItem.updateShortUrl(shortUrl.getUrl(), expireTime);
+
+                    // update database
                     mStorage.updateUriioItemShortUrl(uriioItem.getId(), shortUrl.getUrl(), expireTime);
 
+                    // (re)create BLE beacon
                     startAdvertisingBeacon(uriioItem);
                 } else {
                     uriioItem.setStatus(BaseItem.STATUS_UPDATE_FAILED);
@@ -379,18 +424,19 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
 
         if (null != beacon) {
             mBleAdvertiseManager.enableAdvertiser(beacon, enabled);
+            if (!enabled) {
+                mAlarmManager.cancel(item.getRefreshPendingIntent(UriioService.this));
+            }
         }
         else {
             // beacon is not running
             if (enabled) {
                 if (item instanceof UriioItem) {
-                    UriioItem uriioActiveItem = (UriioItem) item;
-                    requestShortUrl(uriioActiveItem, 1);
+                    requestShortUrl((UriioItem) item, 1);
                 }
                 else {
-                    // ???
-                    // fixme!!!
                     Util.log(TAG, "setItemEnabled requested, but no beacon exists!");
+                    startAdvertisingBeacon(item);
                 }
             }
         }
@@ -409,7 +455,7 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
             mBleAdvertiseManager.enableAdvertiser(beacon, false);
         }
         if (item instanceof UriioItem) {
-            mAlarmManager.cancel(((UriioItem) item).getRefreshPendingIntent(this));
+            mAlarmManager.cancel(item.getRefreshPendingIntent(this));
         }
         mActiveItems.remove(item);
 

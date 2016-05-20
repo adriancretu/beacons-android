@@ -6,12 +6,11 @@ import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.BLEAdvertiseManager;
 import com.uriio.beacons.ble.Beacon;
 import com.uriio.beacons.ble.EddystoneBeacon;
-import com.uriio.beacons.eid.LocalEIDResolver;
 import com.uriio.beacons.eid.EIDUtils;
-import com.uriio.beacons.eid.RegisterParams;
 
 import org.uribeacon.beacon.UriBeacon;
 
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
 /**
@@ -21,6 +20,7 @@ import java.security.GeneralSecurityException;
 public class EddystoneItem extends BaseItem {
     private String mPayload;
     private String mDomain;
+    private long mExpireTime = 0;
 
     public EddystoneItem(long itemId, int flags, String payload, String domain) {
         super(itemId, flags);
@@ -49,9 +49,17 @@ public class EddystoneItem extends BaseItem {
             if (null == data) return null;
 
             if (EddystoneBeacon.FLAG_FRAME_EID == frameType) {
-                data = registerEIDBeacon(data);
+                int timeOffset = ByteBuffer.wrap(data, 16, 4).getInt();
+                byte rotationExponent = (byte) (data[20] & 0x0f);
+                // add time offset to current time
+                int timeCounter = (int) (System.currentTimeMillis() / 1000 + timeOffset);
+                data = EIDUtils.computeEID(data, timeCounter, rotationExponent);
 
+                // only the first 8 bytes are used
                 len = 8;
+
+                mExpireTime = ((timeCounter >> rotationExponent) + 1 << rotationExponent) - timeOffset;
+                mExpireTime *= 1000;
             }
             else len = data.length;
         }
@@ -61,34 +69,14 @@ public class EddystoneItem extends BaseItem {
         return mBeacon;
     }
 
-    private byte[] registerEIDBeacon(byte[] data) throws GeneralSecurityException {
-        // FIXME: 4/15/2016 Read from item
-        int timeCounter = 0;
-        byte rotationExponent = 0;
-
-        // FIXME: 4/16/2016 - single eid resolver
-        LocalEIDResolver eidServer = new LocalEIDResolver();
-
-        // Curve25519 lib doesn't support buffer offsets, so we need to split the buffer
-        byte[] publicKey = new byte[32];
-        byte[] privateKey = new byte[32];
-
-        System.arraycopy(data, 0, publicKey, 0, publicKey.length);
-        System.arraycopy(data, publicKey.length, privateKey, 0, privateKey.length);
-
-        RegisterParams registerParams = eidServer.queryRegistrationParams();
-
-        byte[] identityKey = EIDUtils.computeSharedKey(registerParams.publicKey, privateKey);
-
-        byte[] eid = EIDUtils.computeEID(identityKey, timeCounter, rotationExponent);
-        eidServer.registerBeacon(publicKey, rotationExponent, timeCounter, eid);
-
-        return eid;
-    }
-
     @Override
     public int getKind() {
         return Storage.KIND_EDDYSTONE;
+    }
+
+    @Override
+    protected long getScheduledRefreshTime() {
+        return mExpireTime;
     }
 
     public String getPayload() {

@@ -22,7 +22,7 @@ public class EIDUtils {
 
     /**
      * Computes an Ephemeral ID.
-     * @param key                 AES key (Beacon Identity Key)
+     * @param key                 AES key (Beacon Identity Key). The first 16 bytes are used.
      * @param timeCounter         Beacon time counter
      * @param rotationExponent    Beacon rotation exponent (0 to 15)
      * @return Final ephemeral key of 16 bytes, of which only the first 8 bytes should be used.
@@ -37,7 +37,7 @@ public class EIDUtils {
 //        String transformation = "AES/CBC/PKCS5Padding";
         String transformation = "AES/ECB/NoPadding";
         Cipher aes = Cipher.getInstance(transformation);
-        aes.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"));
+        aes.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, 0, 16, "AES"));
 
         byte[] tempKey = aes.doFinal(new byte[] {
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -48,7 +48,6 @@ public class EIDUtils {
         });
 
         // clear K lowest bits
-        // FIXME: 4/16/2016 check to see what happens if we try to shift with more than 63 bits. The Universe should implode.
         timeCounter = timeCounter >>> rotationExponent << rotationExponent;
 
         // reset cipher with a new encryption key

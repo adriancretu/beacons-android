@@ -1,13 +1,6 @@
 package com.uriio.beacons.model;
 
-import android.app.PendingIntent;
-import android.content.Context;
-import android.content.Intent;
-
 import com.uriio.beacons.Storage;
-import com.uriio.beacons.UriioReceiver;
-import com.uriio.beacons.UriioService;
-import com.uriio.beacons.Util;
 
 /**
  * Container for an URI object.
@@ -64,7 +57,8 @@ public class UriioItem extends EddystoneItem {
         return 0 == mExpireTime ? Long.MAX_VALUE : mExpireTime - System.currentTimeMillis();
     }
 
-    public long getScheduledRefreshTime() {
+    @Override
+    protected long getScheduledRefreshTime() {
         // schedule refresh 7 seconds before actual server timeout
         return mExpireTime - 7 * 1000;
     }
@@ -75,14 +69,6 @@ public class UriioItem extends EddystoneItem {
 
     public long getUrlId() {
         return mUrlId;
-    }
-
-    public PendingIntent getRefreshPendingIntent(Context context) {
-        Intent intent = new Intent(context, UriioReceiver.class);
-        intent.putExtra(UriioService.EXTRA_ITEM_ID, getId());
-
-        // use the item id as the private request code, or else the Intent is "identical" for all items and is reused!
-        return PendingIntent.getBroadcast(context, (int) getId(), intent, 0);
     }
 
     @Override
@@ -96,19 +82,5 @@ public class UriioItem extends EddystoneItem {
             return true;
         }
         return false;
-    }
-
-    @Override
-    public void onAdvertiseStarted(UriioService service) {
-        super.onAdvertiseStarted(service);
-
-        long scheduledRefreshTime = getScheduledRefreshTime();
-
-        if (scheduledRefreshTime > 0) {
-            PendingIntent pendingIntent = getRefreshPendingIntent(service);
-            // first time - create repeating alarm
-            Util.log("UriioService item " + getId() + " now: " + System.currentTimeMillis() + " alarm time: " + getScheduledRefreshTime());
-            service.scheduleRTCAlarm(scheduledRefreshTime, pendingIntent);
-        }
     }
 }

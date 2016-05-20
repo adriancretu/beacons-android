@@ -66,6 +66,16 @@ public class Util {
         return new String(hex);
     }
 
+    public static String binToHex(byte[] raw, int offset, int len, char separator) {
+        byte[] hex = new byte[len * 3];
+        for (int i = 0; i < len; i++) {
+            hex[i * 3] = _hexAlphabet[(0xff & raw[offset + i]) >>> 4];
+            hex[i * 3 + 1] = _hexAlphabet[raw[offset + i] & 0x0f];
+            hex[i * 3 + 2] = (byte) separator;
+        }
+        return new String(hex);
+    }
+
     public static byte[] computeSha1Digest(byte[] data) {
         return computeDigest(data, "SHA-1");
     }
