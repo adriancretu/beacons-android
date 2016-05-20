@@ -2,6 +2,8 @@ package com.uriio.beacons.eid;
 
 import android.support.annotation.NonNull;
 
+import com.uriio.beacons.Util;
+
 import org.whispersystems.curve25519.Curve25519;
 
 import java.security.GeneralSecurityException;
@@ -53,7 +55,7 @@ public class EIDUtils {
 
         // reset cipher with a new encryption key
         aes.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(tempKey, "AES"));
-        return aes.doFinal(new byte[] {
+        byte[] eid = aes.doFinal(new byte[]{
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 rotationExponent,
                 (byte) ((timeCounter >>> 24) & 0xff),
@@ -61,6 +63,8 @@ public class EIDUtils {
                 (byte) ((timeCounter >>> 8) & 0xff),
                 (byte) (timeCounter & 0xff)
         });
+//        Util.log("tc: " + timeCounter + " rotExp " + rotationExponent + " EID: " + Util.binToHex(eid));
+        return eid;
     }
 
     /**
@@ -70,23 +74,41 @@ public class EIDUtils {
      */
     public static byte[] computeSharedSecret(byte[] serverPublicKey, byte[] beaconPrivateKey) {
         // this should yield the exact same result as in EIDResolver.registerBeacon
+//        Util.log("Server public key: " + Util.binToHex(serverPublicKey));
+//        Util.log("Beacon private key: " + Util.binToHex(beaconPrivateKey));
         return Curve25519.getInstance(Curve25519.BEST).calculateAgreement(serverPublicKey, beaconPrivateKey);
     }
 
-    public static byte[] computeIdentityKey(byte[] sharedSecret, byte[] serverPublicKey, byte[] beaconPublicKey)  throws InvalidKeyException, NoSuchAlgorithmException {
+    public static byte[] computeIdentityKey(byte[] sharedSecret, byte[] serverPublicKey,
+                                            byte[] beaconPublicKey) throws InvalidKeyException, NoSuchAlgorithmException {
         if (isZero(sharedSecret)) {
             throw new InvalidKeyException("Shared secret is zero");
         }
 
+//        Util.log("Shared secret: " + Util.binToHex(sharedSecret));
+
+        byte[] salt = new byte[serverPublicKey.length + beaconPublicKey.length];
+        System.arraycopy(serverPublicKey, 0, salt, 0, serverPublicKey.length);
+        System.arraycopy(beaconPublicKey, 0, salt, serverPublicKey.length, beaconPublicKey.length);
+
+//        Util.log("Salt: " + Util.binToHex(salt));
+
         Mac mac = Mac.getInstance("hmacSHA256");
 
-        // SALT
-        byte[] key = new byte[64];
-        System.arraycopy(serverPublicKey, 0, key, 0, serverPublicKey.length);
-        System.arraycopy(beaconPublicKey, 0, key, serverPublicKey.length, beaconPublicKey.length);
-        mac.init(new SecretKeySpec(key, "hmacSHA256"));
+        // hkdf extract
+        mac.init(new SecretKeySpec(salt, "hmacSHA256"));
+        byte[] pseudoRandomKey = mac.doFinal(sharedSecret);
 
-        return mac.doFinal(sharedSecret);
+        Util.log("prk: " + Util.binToHex(salt));
+
+        // hkdf expand
+        mac.reset();
+        mac.init(new SecretKeySpec(pseudoRandomKey, "hmacSHA256"));
+
+        byte[] okm = mac.doFinal(new byte[]{1});
+        Util.log("OKM: " + Util.binToHex(okm));
+
+        return okm;
     }
 
     private static boolean isZero(byte[] buf) {
