@@ -129,7 +129,7 @@ public abstract class BaseItem {
         mBeacon = null;
     }
 
-    protected long getScheduledRefreshTime() {
+    public long getScheduledRefreshTime() {
         return 0;
     }
 

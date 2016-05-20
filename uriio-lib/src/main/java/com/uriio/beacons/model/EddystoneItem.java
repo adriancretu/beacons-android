@@ -80,7 +80,7 @@ public class EddystoneItem extends BaseItem {
     }
 
     @Override
-    protected long getScheduledRefreshTime() {
+    public long getScheduledRefreshTime() {
         return mExpireTime;
     }
 

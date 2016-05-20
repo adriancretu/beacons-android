@@ -58,7 +58,7 @@ public class UriioItem extends EddystoneItem {
     }
 
     @Override
-    protected long getScheduledRefreshTime() {
+    public long getScheduledRefreshTime() {
         // schedule refresh 7 seconds before actual server timeout
         return mExpireTime - 7 * 1000;
     }

@@ -45,8 +45,14 @@ public class LocalEIDResolver implements EIDResolver {
      */
     @Override
     public boolean registerBeacon(byte[] beaconPublicKey, byte rotationExponent, int timeCounter, byte[] ephemeralId) {
-        // this should yield the exact same result as EIDUtils.computeSharedKey from the beacon's perspective
-        byte[] identityKey = mEC.calculateAgreement(beaconPublicKey, mKeyPair.getPrivateKey());
+        // this should yield the exact same result as EIDUtils.computeSharedSecret from the beacon's perspective
+        byte[] sharedSecret = mEC.calculateAgreement(beaconPublicKey, mKeyPair.getPrivateKey());
+        byte[] identityKey;
+        try {
+            identityKey = EIDUtils.computeIdentityKey(sharedSecret, mKeyPair.getPublicKey(), beaconPublicKey);
+        } catch (GeneralSecurityException e) {
+            return false;
+        }
 
         byte[] eid;
         try {

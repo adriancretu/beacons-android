@@ -11,6 +11,7 @@ import java.security.NoSuchAlgorithmException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.Mac;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -67,8 +68,33 @@ public class EIDUtils {
      * @param beaconPrivateKey    Beacon private key
      * @return Shared secret between server and client
      */
-    public static byte[] computeSharedKey(byte[] serverPublicKey, byte[] beaconPrivateKey) {
+    public static byte[] computeSharedSecret(byte[] serverPublicKey, byte[] beaconPrivateKey) {
         // this should yield the exact same result as in EIDResolver.registerBeacon
         return Curve25519.getInstance(Curve25519.BEST).calculateAgreement(serverPublicKey, beaconPrivateKey);
+    }
+
+    public static byte[] computeIdentityKey(byte[] sharedSecret, byte[] serverPublicKey, byte[] beaconPublicKey)  throws InvalidKeyException, NoSuchAlgorithmException {
+        if (isZero(sharedSecret)) {
+            throw new InvalidKeyException("Shared secret is zero");
+        }
+
+        Mac mac = Mac.getInstance("hmacSHA256");
+
+        // SALT
+        byte[] key = new byte[64];
+        System.arraycopy(serverPublicKey, 0, key, 0, serverPublicKey.length);
+        System.arraycopy(beaconPublicKey, 0, key, serverPublicKey.length, beaconPublicKey.length);
+        mac.init(new SecretKeySpec(key, "hmacSHA256"));
+
+        return mac.doFinal(sharedSecret);
+    }
+
+    private static boolean isZero(byte[] buf) {
+        for (byte b : buf) {
+            if (0 != b) {
+                return false;
+            }
+        }
+        return true;
     }
 }

@@ -304,7 +304,8 @@ public class UriioService extends Service implements BLEAdvertiseManager.BLEList
 
         RegisterParams registerParams = eidServer.queryRegistrationParams();
 
-        byte[] identityKey = EIDUtils.computeSharedKey(registerParams.publicKey, privateKey);
+        byte[] sharedSecret = EIDUtils.computeSharedSecret(registerParams.publicKey, privateKey);
+        byte[] identityKey = EIDUtils.computeIdentityKey(sharedSecret, registerParams.publicKey, publicKey);
 
         int now = (int) (System.currentTimeMillis() / 1000);
         // https://github.com/google/eddystone/blob/master/eddystone-eid/eid-computation.md#implementation-guidelines
