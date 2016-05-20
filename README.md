@@ -23,7 +23,7 @@ Android 5.0 or newer is required for creating BLE beacons.
 * Import the uriio-lib folder as a module in your app's main project. In settings.gradle:
 ```
 include ':my-app', ':uriio-lib'
-project (":uriio-lib").projectDir = new File("../uriio/android/uriio-lib")
+project (":uriio-lib").projectDir = new File("../uriio/beacons-android/uriio-lib")
 ```
 * Add dependency to the library in your app's build.gradle file:
 
