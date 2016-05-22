@@ -318,8 +318,8 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
         item.setStatus(remove ? BaseItem.STATUS_STOPPED : BaseItem.STATUS_ADVERTISE_PAUSED);
         if (remove) {
             Beacons.getActive().remove(item);
-            broadcastAction(EVENT_ADVERTISER_STOPPED);
         }
+        broadcastAction(EVENT_ADVERTISER_STOPPED);
     }
 
     public void scheduleRTCAlarm(long triggerAtMillis, PendingIntent operation) {
