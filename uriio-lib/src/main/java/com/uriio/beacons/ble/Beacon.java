@@ -92,7 +92,7 @@ public abstract class Beacon extends AdvertiseCallback {
                 bleAdvertiser.startAdvertising(getAdvertiseSettings(), advertiseData, getAdvertiseScanResponse(), this);
             } catch (IllegalStateException e) {
                 // tried to start advertising after Bluetooth was turned off
-                onStartFailure(ADVERTISE_FAILED_INTERNAL_ERROR);
+                // let upper level notice that BT is off instead of reporting an error
             }
         }
     }

@@ -115,6 +115,7 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
                 switch (item.getStorageState()) {
                     case Storage.STATE_ENABLED:
                         item.onAdvertiseEnabled(this);
+                        broadcastAction(EVENT_ADVERTISER_ADDED);
                         break;
                     case Storage.STATE_PAUSED:
                         stopItem(item, false);
@@ -161,9 +162,10 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
         mAlarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
 
         IntentFilter intentFilter = new IntentFilter(ACTION_ITEM_STATE);
-        intentFilter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-
         LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, intentFilter);
+
+        // Bluetooth events are not received when using LocalBroadcastManager
+        registerReceiver(mBroadcastReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
 
         BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         if (null != bluetoothManager) {
@@ -186,6 +188,9 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
     public void onDestroy() {
         if (null != mBroadcastReceiver) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(mBroadcastReceiver);
+
+            // we registered also in normal way
+            unregisterReceiver(mBroadcastReceiver);
         }
 
         if (null != mBleAdvertiseManager) {
@@ -234,8 +239,6 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
 
         mBleAdvertiseManager.startAdvertiser(beacon);
 
-        // onAdvertiseEnabled any listening UI
-        broadcastAction(EVENT_ADVERTISER_ADDED);
         return true;
     }
 
