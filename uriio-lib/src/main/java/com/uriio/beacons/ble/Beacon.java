@@ -67,15 +67,15 @@ public abstract class Beacon extends AdvertiseCallback {
 
     public static String getErrorName(int errorCode) {
         switch (errorCode) {
-        case AdvertiseCallback.ADVERTISE_FAILED_FEATURE_UNSUPPORTED:
+        case ADVERTISE_FAILED_FEATURE_UNSUPPORTED:
             return "ADVERTISE_FAILED_FEATURE_UNSUPPORTED";
-        case AdvertiseCallback.ADVERTISE_FAILED_TOO_MANY_ADVERTISERS:
+        case ADVERTISE_FAILED_TOO_MANY_ADVERTISERS:
             return "ADVERTISE_FAILED_TOO_MANY_ADVERTISERS";
-        case AdvertiseCallback.ADVERTISE_FAILED_ALREADY_STARTED:
+        case ADVERTISE_FAILED_ALREADY_STARTED:
             return "ADVERTISE_FAILED_ALREADY_STARTED";
-        case AdvertiseCallback.ADVERTISE_FAILED_DATA_TOO_LARGE:
+        case ADVERTISE_FAILED_DATA_TOO_LARGE:
             return "ADVERTISE_FAILED_DATA_TOO_LARGE";
-        case AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR:
+        case ADVERTISE_FAILED_INTERNAL_ERROR:
             return "ADVERTISE_FAILED_INTERNAL_ERROR";
         }
         return "Error " + errorCode;
@@ -88,7 +88,12 @@ public abstract class Beacon extends AdvertiseCallback {
     public void startAdvertising(BluetoothLeAdvertiser bleAdvertiser) {
         AdvertiseData advertiseData = getAdvertiseData();
         if (null != advertiseData) {
-            bleAdvertiser.startAdvertising(getAdvertiseSettings(), advertiseData, getAdvertiseScanResponse(), this);
+            try {
+                bleAdvertiser.startAdvertising(getAdvertiseSettings(), advertiseData, getAdvertiseScanResponse(), this);
+            } catch (IllegalStateException e) {
+                // tried to start advertising after Bluetooth was turned off
+                onStartFailure(ADVERTISE_FAILED_INTERNAL_ERROR);
+            }
         }
     }
 }
