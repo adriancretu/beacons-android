@@ -1,26 +1,23 @@
 ## Android BLE beacon advertising library
 
-### Description
+Broadcasts Bluetooth Low Energy beacons directly from Android 5.0 or later, on supported devices. Consists of:
 
-Android lib for broadcasting BLE beacons right from Android itself. Consists of:
-
-- A restartable service that manages the virtual Bluetooth beacons and their state
-- Beacon and data models for Eddystone (URL/UID/EID) and iBeacon types
-- A persistence layer (using SQLite) for saving the beacon properties and states.
+- Virtual Beacons implementations for:
+    * Eddystone URL and UID
+    * Eddystone EID, with automatic beacon refresh
+    * iBeacon
+- A restartable service that manages the virtual beacons and their state
+- A persistence layer for saving the beacon properties and states.
 - [Ephemeral URL](https://github.com/uriio/ephemeral-api) integration:
-  * using your own project's API key ([get your API key here](https://api.uriio.com/projects))
-  * URL registration and private key creation
-  * Ephemeral URL issuing, rescheduling for new ones before they expire by using a RTC system alarm
-- A basic EID interface and a local EID resolver, used for making up EID beacons according to the spec (but currently created beacons cannot be resolved externally)
+  * URL registration and updating
+  * Automatic short URL periodic re-issuing, and beacon re-creation.
 
-This library is used in the [Beacon Toy app](https://play.google.com/store/apps/details?id=com.uriio)
-
-Android 5.0 or newer is required for creating BLE beacons.
+This library is used by the [Beacon Toy app](https://play.google.com/store/apps/details?id=com.uriio)
 
 *CAREFUL* - the service will restore active beacons when it (re)starts, so be sure that you either stop or delete a beacon after you no longer need it, If your app crashes, the service may restart and bring the beacon back, so make sure you check what beacons are enabled and stop the ones that you no longer need. Besides freeing resources, every device has a maximum number of concurrent BLE broadcasters (around 4, more or less?), which means when that number is reached, new beacons will fail to start.
 
-### Usage (Android Studio / Gradle)
-* Import the uriio-lib folder as a module in your app's main project. In settings.gradle:
+### Setup (Android Studio / Gradle)
+* Import the uriio-lib module in your app's main project. In settings.gradle:
 ```
 include ':my-app', ':uriio-lib'
 project (":uriio-lib").projectDir = new File("../uriio/beacons-android/uriio-lib")
@@ -31,32 +28,107 @@ project (":uriio-lib").projectDir = new File("../uriio/beacons-android/uriio-lib
 compile project(':uriio-lib')
 ```
 
-* In your Application's onCreate() (or Activity or Service), initialize the API:
+* In your main Application's onCreate() (or Activity, or Service), initialize the Beacons API:
 
 ```
-Uriio.initialize(this, "<YOUR_API_KEY_HERE>");
+Beacons.initialize(this, "<YOUR_API_KEY_HERE>");
 ```
 
-### Ephemeral URL support
-To register a new URL, and create a virtual beacon for it, use the ```addBeacon``` method. Pass in the your long URL, the desired TTL for ephemeral URL interval, the beacon's transmit mode and power, and the callback that will give you back the created beacon (from which you can get its token, private key, etc):
+## Creating new beacons
+Use Beacons.add() to create a new beacon, passing in one of the following specializations.
+After adding a beacon, if Bluetooth is on (or when it gets enabled), the beacon will try to start.
+If there's an error starting a beacon, a broadcast is sent by the Beacons service. See the ```BeaconsService``` class for details.
 
+### Eddystone URL
 ```
-Uriio.addBeacon("https://example.com/some-long-path?someArgs", 300,
-        AdvertiseSettings.ADVERTISE_MODE_LOW_POWER,
-        AdvertiseSettings.ADVERTISE_TX_POWER_ULTRA_LOW,
-        new Uriio.OnResultListener<UriioItem>() {
-            @Override
-            public void onResult(UriioItem result, Throwable error) {
-                // there's either a result or an error while registering
-            }
-        });
+Beacons.add(new EddystoneURLSpec(url, mode, txPowerLevel, name));
 ```
 
-That's it! If Bluetooth is on, the beacon should also be running. If it's not on, it will start running as soon as it can. If there's an error starting it, you'll have to create a broadcast receiver, since starting a beacon is an async process that can finish well after the beacon was returned to you by the callback. See the ```UriioService``` class for details.
+### Eddystone UID
+```
+Beacons.add(new EddystoneUIDSpec(namespaceInstance, domain, mode, txPowerLevel, name));
+```
 
-Use the ```deleteBeacon``` or ```enableBeacon``` APIs to remove a beacon or change a beacon's state.
+### Eddystone EID
+An EID beacon first needs to be registered, e.g:
+```
+registrationResult = EIDUtils.register(eidServer, mTemporaryKeyPair.getPublicKey(),
+        mTemporaryKeyPair.getPrivateKey(), rotationExponent);
+```
+Using the registration result we can now add the EID beacon to the registry and start it:
+```
+Beacons.add(new EddystoneEIDSpec(registrationResult.getIdentityKey(), rotationExponent,
+        registrationResult.getTimeOffset(), mode, txPowerLevel, name));
+```
 
-Retrieve the list of your beacons by calling ```getBeacons```
+### Ephemeral URL
+An ephemeral URL broadcasts an Eddystone URL beacon, but can also dynamically change the broadcasted URL (and also even the target URL)
 
-### Other beacon types
-For creating other types of beacons (normal Eddystones, iBeacon), you'd have to bind to the ```UriioService``` from your own Activity or Service, and use the create* methods to add NEW beacons (remember, beacons are persisted across app and service restarts).
+Example for registering a new URL and on success, creating an Ephemeral URL beacon:
+
+```
+byte[] temporaryPublicKey = null; // lets the API create a new key-pair
+// timeToLive is in seconds; use 0 for an initial non-ephemeral beacon
+Beacons.uriio().registerUrl(url, temporaryPublicKey, new Beacons.OnResultListener<Url>() {
+    @Override
+    public void onResult(Url result, Throwable error) {
+        if (null != result) {
+            // URL registered. We can now add a new Ephemeral beacon!
+            Beacons.add(new EphemeralURLSpec(result.getId(), result.getToken(),
+                    result.getUrl(), timeToLive, mode, txPowerLevel, name));
+        }
+        else {
+            showError(error);
+        }
+    }
+});
+```
+
+The API will issue periodically new short URLs for broadcasting as an Eddystone URL beacon, according to the
+timeToLive property. If the TTL is zero, the beacon is not periodically updated with a new URL.
+
+To update the target URL (with or without the need to change the beacon's other properties), use:
+```
+// item is an existing UriioItem
+Beacons.uriio().updateUrl(item.getUrlId(), item.getUrlToken(), url, new Beacons.OnResultListener<Url>() {
+    @Override
+    public void onResult(Url result, Throwable error) {
+        if (null != result) {
+            // URL target was updated. Save the new value to the local store. 
+            // fields that are not modified should be passed back from the current item
+            Beacons.editEphemeralURLBeacon(item, url, mode, txPowerLevel, timeToLive, name);
+            mConfigActivity.onConfigFinished(false);
+        }
+        else {
+            showError(error);
+        }
+    }
+});
+```
+
+### iBeacon
+Adding an iBeacon:
+```
+Beacons.add(new iBeaconSpec(uuid, major, minor, mode, txPowerLevel, name));
+```
+
+## Editing a beacon
+To update details of a beacon, use the specialized ```Beacons.edit*()``` calls for now. Fields that you don't want to update should be read back from the item. A simpler approach is under way.
+
+### Deleting a beacon
+```Beacons.delete(id)```
+
+### Changing a beacon's state
+A beacon can be in one of three states: Active, Paused, or Stopped. Use ```Beacons.setState``` to change a beacon's state.
+
+## Listing the beacons
+Retrieve the list of active and paused beacons by calling ```Beacons.getActive```
+Stopped beacons are saved to storage. To iterate over them, use ```Beacons.getStopped()``` to get a Cursor.
+While iterating over the cursor you can call ```Storage.itemFromCursor()``` to get actual items. 
+
+## Changelog
+1.2 (May 22, 2016)
+* API overhaul
+
+1.0 (May 5 2016)
+* Initial release
