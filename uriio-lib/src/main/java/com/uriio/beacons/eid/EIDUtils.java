@@ -119,4 +119,36 @@ public class EIDUtils {
         }
         return true;
     }
+
+    /**
+     * Atempts EID beacon registration.
+     * @param eidServer           EID server
+     * @param publicKey           Beacon public key
+     * @param privateKey          Beacon private key
+     * @param rotationExponent    EID rotation exponent (0 to 15)
+     * @return  Result of registration, or null if registration failed.
+     * @throws GeneralSecurityException
+     */
+    public static RegistrationResult register(EIDResolver eidServer, byte[] publicKey,
+                                              byte[] privateKey, byte rotationExponent) throws GeneralSecurityException {
+        RegisterParams registerParams = eidServer.queryRegistrationParams();
+        if (null == registerParams) return null;
+
+        byte[] sharedSecret = computeSharedSecret(registerParams.publicKey, privateKey);
+        byte[] identityKey = computeIdentityKey(sharedSecret, registerParams.publicKey, publicKey);
+
+        int now = (int) (System.currentTimeMillis() / 1000);
+        // https://github.com/google/eddystone/blob/master/eddystone-eid/eid-computation.md#implementation-guidelines
+        int timeCounter = now & ~0xffff | 65280;
+
+        // save the offset between current time and time counter so we can restore correctly
+        int timeOffset = now - timeCounter;
+
+        byte[] firstEID = computeEID(identityKey, timeCounter, rotationExponent);
+        if (!eidServer.registerBeacon(publicKey, rotationExponent, timeCounter, firstEID)) {
+            return null;
+        }
+
+        return new RegistrationResult(identityKey, timeOffset);
+    }
 }

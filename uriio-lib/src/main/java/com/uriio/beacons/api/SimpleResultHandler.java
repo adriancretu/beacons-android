@@ -1,6 +1,6 @@
 package com.uriio.beacons.api;
 
-import com.uriio.beacons.Uriio;
+import com.uriio.beacons.Beacons;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
@@ -14,9 +14,9 @@ import retrofit2.Response;
  * Created on 5/5/2016.
  */
 public class SimpleResultHandler<T> implements Callback<T> {
-    private final Uriio.OnResultListener<T> callback;
+    private final Beacons.OnResultListener<T> callback;
 
-    public SimpleResultHandler(Uriio.OnResultListener<T> callback) {
+    public SimpleResultHandler(Beacons.OnResultListener<T> callback) {
         this.callback = callback;
     }
 

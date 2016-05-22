@@ -50,7 +50,6 @@ public class BLEAdvertiseManager {
             }
 
             if (!mBluetoothAdapter.isMultipleAdvertisementSupported()) {
-                mListener.onBLEAdvertiseNotSupported();
                 return false;
             }
 
@@ -112,11 +111,14 @@ public class BLEAdvertiseManager {
     }
 
     public boolean canAdvertise() {
+        if (null != mBleAdvertiser) return true;
+
         if (!mBluetoothAdapter.isEnabled()) {
             return false;
         }
 
         if (!mBluetoothAdapter.isMultipleAdvertisementSupported()) {
+            mListener.onBLEAdvertiseNotSupported();
             return false;
         }
 

@@ -7,7 +7,7 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
 
     <application android:allowBackup="true" android:supportsRtl="true">
-        <service android:name=".UriioService"/>
-        <receiver android:name=".UriioReceiver"/>
+        <service android:name=".BleService"/>
+        <receiver android:name=".AlarmReceiver"/>
     </application>
 </manifest>

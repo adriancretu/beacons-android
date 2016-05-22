@@ -51,7 +51,7 @@ public class EddystoneItem extends BaseItem {
             if (EddystoneBeacon.FLAG_FRAME_EID == frameType) {
                 int timeOffset = ByteBuffer.wrap(data, 16, 4).getInt();
 
-                // sanitize time offset to match range; see UriioService.createEddystoneEIDItem
+                // sanitize time offset to match range; see Uriio.addEddystoneEIDBeacon
                 timeOffset = Math.min(255, Math.max(-65280, timeOffset));
 
                 // sanitize rotation exponent to [0, 15] range

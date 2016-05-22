@@ -8,6 +8,12 @@ import com.google.gson.annotations.SerializedName;
  * Created on 4/29/2016.
  */
 public class Url {
+    /**
+     * Outgoing API Key for POST/PUT requests
+     */
+    @SerializedName("apiKey")
+    private String apiKey;
+
     @SerializedName("id")
     private long id;
 
@@ -33,9 +39,16 @@ public class Url {
     @SerializedName("hits")
     private long hits;
 
-    public Url(String url, byte[] publicKey) {
+    public Url(String apiKey, String url, byte[] publicKey) {
+        this.apiKey = apiKey;
         this.url = url;
         this.publicKey = Base64.encodeToString(publicKey, Base64.NO_PADDING | Base64.NO_WRAP | Base64.URL_SAFE);
+    }
+
+    public Url(String apiKey, String urlToken, String url) {
+        this.apiKey = apiKey;
+        this.url = url;
+        this.token = urlToken;
     }
 
     public String getToken() {

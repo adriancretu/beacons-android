@@ -1,13 +1,8 @@
 package com.uriio.beacons.model;
 
-import android.app.PendingIntent;
 import android.bluetooth.le.AdvertiseSettings;
-import android.content.Context;
-import android.content.Intent;
 
-import com.uriio.beacons.UriioReceiver;
-import com.uriio.beacons.UriioService;
-import com.uriio.beacons.Util;
+import com.uriio.beacons.BleService;
 import com.uriio.beacons.ble.BLEAdvertiseManager;
 import com.uriio.beacons.ble.Beacon;
 
@@ -133,25 +128,13 @@ public abstract class BaseItem {
         return 0;
     }
 
-    public void onAdvertiseStarted(UriioService service) {
-        setStatus(BaseItem.STATUS_ADVERTISING);
-
-        long scheduledRefreshTime = getScheduledRefreshTime();
-
-        if (scheduledRefreshTime > 0) {
-            PendingIntent pendingIntent = getRefreshPendingIntent(service);
-
-            // schedule alarm for next refresh
-            Util.log("UriioService item " + getId() + " now: " + System.currentTimeMillis() + " alarm time: " + getScheduledRefreshTime());
-            service.scheduleRTCAlarm(scheduledRefreshTime, pendingIntent);
-        }
-    }
-
-    public PendingIntent getRefreshPendingIntent(Context context) {
-        Intent intent = new Intent(context, UriioReceiver.class);
-        intent.putExtra(UriioService.EXTRA_ITEM_ID, getId());
-
-        // use the item id as the private request code, or else the Intent is "identical" for all items and is reused!
-        return PendingIntent.getBroadcast(context, (int) getId(), intent, 0);
+    /**
+     * Called when the item should start advertising a new BLE beacon.
+     * Default implementation starts a new beacon; subclasses may override with other behaviour.
+     * @param service    BLE Service
+     */
+    public void onAdvertiseEnabled(BleService service) {
+        // (re)create the beacon
+        service.startItemAdvertising(this);
     }
 }

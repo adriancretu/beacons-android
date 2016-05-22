@@ -289,48 +289,14 @@ public class Storage extends SQLiteOpenHelper {
         stmt.close();
     }
 
-    public Cursor getActiveItems() {
-        return getReadableDatabase().rawQuery("SELECT i.rowid, key, longUrl, created, state, shortUrl, expires, advMode, txLevel, urlId, ttl, flags, kind, url, uuid, maj, min, name, domain, privateKey" +
+    public Cursor getAllItems(boolean stopped) {
+        // if we ever use this in a CursorAdapter, the rowid column should also be aliased to '_id'
+        return getReadableDatabase().rawQuery(String.format("SELECT i.rowid, key, longUrl, created, state, shortUrl, expires, advMode, txLevel, urlId, ttl, flags, kind, url, uuid, maj, min, name, domain, privateKey" +
                 " FROM " + ITEMS_TABLE + " i" +
                 " LEFT OUTER JOIN " + URIIO_TABLE + " u ON i.rowid=u.rowid" +
                 " LEFT OUTER JOIN " + EDDYSTONE_TABLE + " e ON i.rowid=e.rowid" +
                 " LEFT OUTER JOIN " + IBEACONS_TABLE + " a ON i.rowid=a.rowid" +
-                " WHERE state<2 ORDER BY i.rowid DESC", null);
-    }
-
-    public Cursor getUriioItems() {
-        return getReadableDatabase().rawQuery("SELECT i.rowid, flags, advMode, txLevel, state, name, urlId, key, longUrl, ttl, shortUrl, expires, privateKey" +
-                " FROM " + ITEMS_TABLE + " i" +
-                " LEFT OUTER JOIN " + URIIO_TABLE + " u ON i.rowid=u.rowid" +
-                " WHERE kind=1 ORDER BY i.rowid DESC", null);
-    }
-
-    public static UriioItem uriioItemFromCursor(Cursor cursor) {
-        byte[] privateKey = null;
-        String pk = cursor.getString(12);
-        if (pk != null && pk.length() > 0) {
-            privateKey = Base64.decode(pk, Base64.URL_SAFE);
-        }
-        UriioItem item = new UriioItem(cursor.getLong(0), cursor.getInt(1), cursor.getLong(6),
-                cursor.getString(7), cursor.getInt(9), cursor.getLong(11), cursor.getString(10),
-                cursor.getString(8), privateKey);
-
-        item.setAdvertiseMode(cursor.getInt(2));
-        item.setTxPowerLevel(cursor.getInt(3));
-        item.setStorageState(cursor.getInt(4));
-        item.setName(cursor.getString(5));
-
-        return item;
-    }
-
-    public Cursor getInactiveItems() {
-        // if we use this in a CursorAdapter, the rowid column should also be aliased to '_id'
-        return getReadableDatabase().rawQuery("SELECT i.rowid, key, longUrl, created, state, shortUrl, expires, advMode, txLevel, urlId, ttl, flags, kind, url, uuid, maj, min, name, domain, privateKey" +
-                " FROM " + ITEMS_TABLE + " i" +
-                " LEFT OUTER JOIN " + URIIO_TABLE + " u ON i.rowid=u.rowid" +
-                " LEFT OUTER JOIN " + EDDYSTONE_TABLE + " e ON i.rowid=e.rowid" +
-                " LEFT OUTER JOIN " + IBEACONS_TABLE + " a ON i.rowid=a.rowid" +
-                " WHERE state=2 ORDER BY i.rowid DESC", null);
+                " WHERE state%s2 ORDER BY i.rowid DESC", stopped ? "=" : "<"), null);
     }
 
     public Cursor getItem(long itemId) {
@@ -352,7 +318,7 @@ public class Storage extends SQLiteOpenHelper {
         String name = cursor.getString(17);
 
         if (kind == KIND_URIIO) {
-            String apiKey = cursor.getString(1);
+            String urlToken = cursor.getString(1);
             String longUrl = cursor.getString(2);
             long expires = cursor.getLong(6);
             long urlId = cursor.getLong(9);
@@ -365,7 +331,7 @@ public class Storage extends SQLiteOpenHelper {
                 privateKey = Base64.decode(pk, Base64.URL_SAFE);
             }
 
-            item = new UriioItem(itemId, flags, urlId, apiKey, ttl, expires, shortUrl, longUrl, privateKey);
+            item = new UriioItem(itemId, flags, urlId, urlToken, ttl, expires, shortUrl, longUrl, privateKey);
         } else if (kind == KIND_EDDYSTONE) {
             item = new EddystoneItem(itemId, flags, cursor.getString(13), cursor.getString(18));
         } else if (kind == KIND_IBEACON) {
@@ -383,14 +349,14 @@ public class Storage extends SQLiteOpenHelper {
         return item;
     }
 
-    public void updateIBeaconItem(long id, int mode, int txPowerLevel, byte[] rawUuid, int major, int minor, int flags, String name) {
+    public void updateIBeaconItem(long id, int mode, int txPowerLevel, int flags, String name, byte[] uuid, int major, int minor) {
         SQLiteDatabase db = getWritableDatabase();
 
         // todo - transact
         updateItem(db, id, mode, txPowerLevel, flags, name);
 
         SQLiteStatement stmt = db.compileStatement("UPDATE " + IBEACONS_TABLE + " SET uuid=?, maj=?, min=? WHERE rowid=?");
-        stmt.bindString(1, Base64.encodeToString(rawUuid, Base64.NO_PADDING | Base64.NO_WRAP));
+        stmt.bindString(1, Base64.encodeToString(uuid, Base64.NO_PADDING | Base64.NO_WRAP));
         stmt.bindLong(2, major);
         stmt.bindLong(3, minor);
         stmt.bindLong(4, id);
@@ -416,15 +382,16 @@ public class Storage extends SQLiteOpenHelper {
         stmtUpdateEddystone.executeUpdateDelete();
     }
 
-    public void updateUriioItem(long id, int mode, int txPowerLevel, int timeToLive, int flags, String name) {
+    public void updateUriioItem(long id, int mode, int txPowerLevel, int flags, String name, String url, int timeToLive) {
         SQLiteDatabase db = getWritableDatabase();
 
         // todo - transact
         updateItem(db, id, mode, txPowerLevel, flags, name);
 
-        SQLiteStatement stmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET ttl=? WHERE rowid=?");
+        SQLiteStatement stmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET ttl=?, longUrl=? WHERE rowid=?");
         stmt.bindLong(1, timeToLive);
-        stmt.bindLong(2, id);
+        stmt.bindString(2, url);
+        stmt.bindLong(3, id);
 
         stmt.executeUpdateDelete();
     }

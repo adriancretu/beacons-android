@@ -1,11 +1,22 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.Beacons;
+import com.uriio.beacons.BleService;
 import com.uriio.beacons.Storage;
+import com.uriio.beacons.Util;
+import com.uriio.beacons.api.ShortUrl;
+import com.uriio.beacons.api.ShortUrls;
+
+import java.util.Date;
+
+import static com.uriio.beacons.BleService.EVENT_SHORTURL_FAILED;
 
 /**
- * Container for an URI object.
+ * Data model for an UriIO item.
  */
 public class UriioItem extends EddystoneItem {
+    private static final String TAG = "UriioItem";
+
     /** Long URL **/
     private String mLongUrl;
 
@@ -30,10 +41,6 @@ public class UriioItem extends EddystoneItem {
         mTimeToLive = ttl;
         mExpireTime = expireTimestamp;
         mPrivateKey = privateKey;
-    }
-
-    public byte[] getPrivateKey() {
-        return mPrivateKey;
     }
 
     public String getUrlToken() {
@@ -82,5 +89,38 @@ public class UriioItem extends EddystoneItem {
             return true;
         }
         return false;
+    }
+
+    public boolean updateLongUrl(String url) {
+        if (!url.equals(mLongUrl)) {
+            mLongUrl = url;
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void onAdvertiseEnabled(final BleService service) {
+        if (null == getPayload() || getMillisecondsUntilExpires() < 7 * 1000) {
+            Util.log(TAG, "Updating short url for item " + getId());
+            Beacons.uriio().issueShortUrls(mUrlId, mUrlToken, mTimeToLive, 1, new Beacons.OnResultListener<ShortUrls>() {
+                @Override
+                public void onResult(ShortUrls result, Throwable error) {
+                    if (null != result) {
+                        ShortUrl shortUrl = result.getItems()[0];
+                        Date expireDate = shortUrl.getExpire();
+                        long expireTime = null == expireDate ? 0 : expireDate.getTime();
+
+                        Beacons.updateEphemeralURLBeacon(UriioItem.this, shortUrl.getUrl(), expireTime);
+                    } else {
+                        setStatus(BaseItem.STATUS_UPDATE_FAILED);
+                        service.broadcastError(EVENT_SHORTURL_FAILED, error);
+                    }
+                }
+            });
+        }
+        else {
+            service.startItemAdvertising(this);
+        }
     }
 }
