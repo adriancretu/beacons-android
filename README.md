@@ -116,7 +116,10 @@ Beacons.add(new iBeaconSpec(uuid, major, minor, mode, txPowerLevel, name));
 To update details of a beacon, use the specialized ```Beacons.edit*()``` calls for now. Fields that you don't want to update should be read back from the item. A simpler approach is under way.
 
 ### Deleting a beacon
-```Beacons.delete(id)```
+
+```
+Beacons.delete(id)
+```
 
 ### Changing a beacon's state
 A beacon can be in one of three states: Active, Paused, or Stopped. Use ```Beacons.setState``` to change a beacon's state.
