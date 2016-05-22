@@ -140,7 +140,7 @@ public class Beacons {
         Storage.getInstance().deleteItem(itemId);
 
         if (findActive(itemId) != null) {
-            sendStateBroadcast(itemId, BleService.COMMAND_STATE);
+            sendStateBroadcast(itemId);
         }
     }
 
@@ -163,7 +163,7 @@ public class Beacons {
             }
 
             if (null != item) {
-                sendStateBroadcast(itemId, BleService.COMMAND_STATE);
+                sendStateBroadcast(itemId);
             }
         }
     }
@@ -351,11 +351,9 @@ public class Beacons {
         return item;
     }
 
-    private static void sendStateBroadcast(long itemId, int command) {
+    private static void sendStateBroadcast(long itemId) {
         LocalBroadcastManager.getInstance(getInstance().mAppContext).sendBroadcast(
-            new Intent(getInstance().mAppContext, BleService.class)
-                .putExtra(BleService.EXTRA_ITEM_ID, itemId)
-                .putExtra(BleService.EXTRA_COMMAND, command));
+            new Intent(BleService.ACTION_ITEM_STATE).putExtra(BleService.EXTRA_ITEM_ID, itemId));
     }
 
     private static void restartBeacon(BaseItem item) {

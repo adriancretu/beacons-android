@@ -32,8 +32,8 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
     /** Outgoing action for when an event occurred in our service */
     public static final String ACTION_BEACONS = "com.uriio.ACTION_BEACONS";
 
-    /** Incoming beacon-related command */
-    public static final String ACTION_COMMAND = "com.uriio.ACTION_COMMAND";
+    /** Item state changed*/
+    public static final String ACTION_ITEM_STATE = "com.uriio.ACTION_ITEM_STATE";
 
     public static final int EVENT_ADVERTISER_ADDED      = 1;
     public static final int EVENT_ADVERTISER_STARTED    = 2;
@@ -45,11 +45,7 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
     public static final int EVENT_SHORTURL_FAILED       = 6;
 
     /** Service intent extras */
-    public static final String EXTRA_COMMAND    = "cmd";
     public static final String EXTRA_ITEM_ID    = "id";
-
-    public static final int COMMAND_STATE   = 0;
-    public static final int COMMAND_REFRESH = 1;
 
     public class LocalBinder extends Binder {
         public BleService getUriioService() {
@@ -72,8 +68,8 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
                 case BluetoothAdapter.ACTION_STATE_CHANGED:
                     handleBluetoothStateChanged(intent);
                     break;
-                case ACTION_COMMAND:
-                    handleBeaconCommand(intent);
+                case ACTION_ITEM_STATE:
+                    handleItemState(intent);
                     break;
             }
         }
@@ -109,30 +105,23 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
         }
     }
 
-    private void handleBeaconCommand(Intent intent) {
+    private void handleItemState(Intent intent) {
         long itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0);
         if (0 != itemId) {
             Util.log(TAG, "Received intent for item " + itemId);
             BaseItem item = Beacons.findActive(itemId);
 
-            if (null != item && intent.hasExtra(EXTRA_COMMAND)) {
-                switch (intent.getIntExtra(EXTRA_COMMAND, 0)) {
-                    case COMMAND_REFRESH:
+            if (null != item) {
+                switch (item.getStorageState()) {
+                    case Storage.STATE_ENABLED:
                         item.onAdvertiseEnabled(this);
                         break;
-                    case COMMAND_STATE: {
-                        switch (item.getStorageState()) {
-                            case Storage.STATE_ENABLED:
-                                item.onAdvertiseEnabled(this);
-                                break;
-                            case Storage.STATE_PAUSED:
-                                stopItem(item, false);
-                                break;
-                            case Storage.STATE_STOPPED:
-                                stopItem(item, true);
-                                break;
-                        }
-                    }
+                    case Storage.STATE_PAUSED:
+                        stopItem(item, false);
+                        break;
+                    case Storage.STATE_STOPPED:
+                        stopItem(item, true);
+                        break;
                 }
             }
         }
@@ -153,6 +142,14 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
         // intent is null if service restarted
         if (null != intent) {
             AlarmReceiver.completeWakefulIntent(intent);
+
+            long itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0);
+            if (0 != itemId) {
+                BaseItem item = Beacons.findActive(itemId);
+                if (null != item) {
+                    item.onAdvertiseEnabled(this);
+                }
+            }
         }
 
         return super.onStartCommand(intent, flags, startId);
@@ -163,7 +160,7 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
 
         mAlarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
 
-        IntentFilter intentFilter = new IntentFilter(ACTION_COMMAND);
+        IntentFilter intentFilter = new IntentFilter(ACTION_ITEM_STATE);
         intentFilter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
 
         LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, intentFilter);

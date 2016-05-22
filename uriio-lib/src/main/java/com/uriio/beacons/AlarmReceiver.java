@@ -19,8 +19,7 @@ public class AlarmReceiver extends WakefulBroadcastReceiver {
         if (0 != itemId) {
             // start the service, signaling we want to refresh a specific beacon
             Intent serviceIntent = new Intent(context, BleService.class)
-                .putExtra(BleService.EXTRA_ITEM_ID, itemId)
-                .putExtra(BleService.EXTRA_COMMAND, BleService.COMMAND_REFRESH);
+                .putExtra(BleService.EXTRA_ITEM_ID, itemId);
 
             // Start the wakeful service, keeping the device awake while it is launching.
             startWakefulService(context, serviceIntent);
