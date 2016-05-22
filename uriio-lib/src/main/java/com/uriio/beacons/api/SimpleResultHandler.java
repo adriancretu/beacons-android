@@ -1,5 +1,6 @@
 package com.uriio.beacons.api;
 
+import com.google.gson.JsonParseException;
 import com.uriio.beacons.Beacons;
 
 import java.io.IOException;
@@ -42,8 +43,8 @@ public class SimpleResultHandler<T> implements Callback<T> {
                         .responseBodyConverter(ErrorHolder.class, new Annotation[0])
                         .convert(response.errorBody());
                 error = errorModel.getError().message;
-            } catch (IOException | IllegalStateException ignored) {
-                // http error 500 yields non-json, and we'd crash with an IllegalStateException
+            } catch (IOException | JsonParseException ignored) {
+                // http error 5xx or non-json content
             }
         }
         return error;
