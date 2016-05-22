@@ -101,7 +101,6 @@ public class BleService extends Service implements BLEAdvertiseManager.BLEListen
                     activeItem.setStatus(BaseItem.STATUS_ADVERTISE_PAUSED);
                 }
             }
-            broadcastAction(EVENT_ADVERTISER_STARTED);
         }
     }
 

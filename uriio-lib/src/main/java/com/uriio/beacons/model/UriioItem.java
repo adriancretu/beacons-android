@@ -112,6 +112,7 @@ public class UriioItem extends EddystoneItem {
                         long expireTime = null == expireDate ? 0 : expireDate.getTime();
 
                         Beacons.updateEphemeralURLBeacon(UriioItem.this, shortUrl.getUrl(), expireTime);
+                        service.startItemAdvertising(UriioItem.this);
                     } else {
                         setStatus(BaseItem.STATUS_UPDATE_FAILED);
                         service.broadcastError(EVENT_SHORTURL_FAILED, error);

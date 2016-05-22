@@ -254,8 +254,6 @@ public class Beacons {
 
         // update database
         Storage.getInstance().updateUriioItemShortUrl(item.getId(), shortUrl, expireTime);
-
-        restartBeacon(item);
     }
 
     public static void editiBeacon(iBeaconItem item, byte[] uuid, int major, int minor,

@@ -243,7 +243,8 @@ public class Storage extends SQLiteOpenHelper {
         if (null == mUpdateShortUrlStmt) {
             mUpdateShortUrlStmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET shortUrl=?, expires=? WHERE rowid=?");
         }
-        mUpdateShortUrlStmt.bindString(1, shortUrl);
+        if (null == shortUrl) mUpdateShortUrlStmt.bindNull(1);
+        else mUpdateShortUrlStmt.bindString(1, shortUrl);
         mUpdateShortUrlStmt.bindLong(2, expireTimestamp);
         mUpdateShortUrlStmt.bindLong(3, itemId);
 
