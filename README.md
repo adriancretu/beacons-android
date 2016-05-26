@@ -48,7 +48,7 @@ Beacon iBeacon = new iBeacon(uuid, major, minor);
 
 Use Beacons.add() to store and actually start a beacon.
 After adding a beacon, if Bluetooth is on (or when it gets enabled), the beacon will try to start.
-If there's an error starting a beacon, a broadcast is sent by the Beacons service. See the ```BeaconsService``` class for details.
+If there's an error starting a beacon, a broadcast is sent by the service. See the ```BleService``` class for details.
 
 ### Eddystone EID
 
@@ -66,7 +66,7 @@ Beacons.add(new EddystoneEID(registrationResult.getIdentityKey(), rotationExpone
 
 ### Eddystone-GATT usage
 
-Eddystone-GAYY will run a GATT server and can configure a Eddystone URL/UID/EID beacon.
+Eddystone-GATT will run a GATT server and can configure a Eddystone URL/UID/EID beacon.
 You receive the final configured beacon in a callback after the owner disconnects.
 Every beacon will store its own Lock Key, allowing re-configuration in future versions (since e.g. the Proximity API also keeps the Unlock Key, we must
 keep a copy of it too, to allow GATT-based beacon unlocking).
