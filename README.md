@@ -72,6 +72,10 @@ Every beacon will store its own Lock Key, allowing re-configuration in future ve
 keep a copy of it too, to allow GATT-based beacon unlocking).
 
 ```
+// create and start a beacon used to advertise conneectable mode
+mPivotBeacon = new EddystoneURL("http://cf.physical-web.org");
+Beacons.add(mPivotBeacon);
+
 mGattServer = new EddystoneGattServer(mPivotBeacon, new EddystoneGattServer.Listener() {
     @Override
     public void onGattFinished(EddystoneBase configuredBeacon) {
@@ -89,16 +93,15 @@ mGattServer = new EddystoneGattServer(mPivotBeacon, new EddystoneGattServer.List
 // start with an empty UID advertiser with default settings.
 EddystoneUID currentBeacon = new EddystoneUID(new byte[16]);
 
-mEditLog.setText(String.format("Unlock Key:\n%s\n", Util.binToHex(currentBeacon.getLockKey(), 0, 16, ' ')));;
+userFriendlyUnlockKey = Util.binToHex(currentBeacon.getLockKey(), 0, 16, ' ');
 
 mGattServer.start(mConfigActivity, currentBeacon);
 
 // ... when you are done
-
 mGattServer.close();
+
 // this must be done last
 Beacons.delete(mPivotBeacon.getId());
-
 ```
 
 ### Ephemeral URL
