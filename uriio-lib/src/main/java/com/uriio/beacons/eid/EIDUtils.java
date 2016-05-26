@@ -25,9 +25,9 @@ public class EIDUtils {
 
     /**
      * Computes an Ephemeral ID.
-     * @param key                 AES key (Beacon Identity Key). The first 16 bytes are used.
-     * @param timeCounter         Beacon time counter
-     * @param rotationExponent    Beacon rotation exponent (0 to 15)
+     * @param key                 AES key (Advertiser Identity Key). The first 16 bytes are used.
+     * @param timeCounter         Advertiser time counter
+     * @param rotationExponent    Advertiser rotation exponent (0 to 15)
      * @return Final ephemeral key of 16 bytes, of which only the first 8 bytes should be used.
      * @throws NoSuchPaddingException
      * @throws NoSuchAlgorithmException
@@ -69,13 +69,13 @@ public class EIDUtils {
 
     /**
      * Client-side shared-secret agreement
-     * @param beaconPrivateKey    Beacon private key
+     * @param beaconPrivateKey    Advertiser private key
      * @return Shared secret between server and client
      */
     public static byte[] computeSharedSecret(byte[] serverPublicKey, byte[] beaconPrivateKey) {
         // this should yield the exact same result as in EIDResolver.registerBeacon
 //        Util.log("Server public key: " + Util.binToHex(serverPublicKey));
-//        Util.log("Beacon private key: " + Util.binToHex(beaconPrivateKey));
+//        Util.log("Advertiser private key: " + Util.binToHex(beaconPrivateKey));
         return Curve25519.getInstance(Curve25519.BEST).calculateAgreement(serverPublicKey, beaconPrivateKey);
     }
 
@@ -123,8 +123,8 @@ public class EIDUtils {
     /**
      * Atempts EID beacon registration.
      * @param eidServer           EID server
-     * @param publicKey           Beacon public key
-     * @param privateKey          Beacon private key
+     * @param publicKey           Advertiser public key
+     * @param privateKey          Advertiser private key
      * @param rotationExponent    EID rotation exponent (0 to 15)
      * @return  Result of registration, or null if registration failed.
      * @throws GeneralSecurityException

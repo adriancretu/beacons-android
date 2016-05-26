@@ -6,6 +6,7 @@ Broadcasts Bluetooth Low Energy beacons directly from Android 5.0 or later, on s
     * Eddystone URL and UID
     * Eddystone EID, with automatic beacon refresh
     * iBeacon
+- An Eddystone-GATT service and server, to allow remote EID registration via Bluetooth (e.g. with Beacon Tools).
 - A restartable service that manages the virtual beacons and their state
 - A persistence layer for saving the beacon properties and states.
 - [Ephemeral URL](https://github.com/uriio/ephemeral-api) integration:
@@ -31,37 +32,77 @@ compile project(':uriio-lib')
 * In your main Application's onCreate() (or Activity, or Service), initialize the Beacons API:
 
 ```
+// note - API Key is optional unless you need Ephemeral URL support
 Beacons.initialize(this, "<YOUR_API_KEY_HERE>");
 ```
 
 ## Creating new beacons
-Use Beacons.add() to create a new beacon, passing in one of the following specializations.
+
+All constructors support extra arguments to set their initial Advertise mode, TX power, and name.
+
+```
+Beacon urlBeacon = new EddystoneURL(url);
+Beacon uidBeacon = new EddystoneUID(namespaceInstance);
+Beacon iBeacon = new iBeacon(uuid, major, minor);
+```
+
+Use Beacons.add() to store and actually start a beacon.
 After adding a beacon, if Bluetooth is on (or when it gets enabled), the beacon will try to start.
 If there's an error starting a beacon, a broadcast is sent by the Beacons service. See the ```BeaconsService``` class for details.
 
-### Eddystone URL
-```
-Beacons.add(new EddystoneURLSpec(url, mode, txPowerLevel, name));
-```
-
-### Eddystone UID
-```
-Beacons.add(new EddystoneUIDSpec(namespaceInstance, domain, mode, txPowerLevel, name));
-```
-
 ### Eddystone EID
-An EID beacon first needs to be registered, e.g:
+
+An EID beacon first needs to be registered. You can fake a registration and use that to provision an EID beacon.
+Realistically, you'll use the Eddystone-GATT feature to listen for a registration external tool (like Beacon Tools) that will provide the
+EID registration details.
 ```
-registrationResult = EIDUtils.register(eidServer, mTemporaryKeyPair.getPublicKey(),
+fakeRegistration = EIDUtils.register(new LocalEIDResolver(), mTemporaryKeyPair.getPublicKey(),
         mTemporaryKeyPair.getPrivateKey(), rotationExponent);
+
+// using the registration result we can now add the EID beacon to the registry and start it:
+Beacons.add(new EddystoneEID(registrationResult.getIdentityKey(), rotationExponent,
+        registrationResult.getTimeOffset()));
 ```
-Using the registration result we can now add the EID beacon to the registry and start it:
+
+### Eddystone-GATT usage
+
+Eddystone-GAYY will run a GATT server and can configure a Eddystone URL/UID/EID beacon.
+You receive the final configured beacon in a callback after the owner disconnects.
+Every beacon will store its own Lock Key, allowing re-configuration in future versions (since e.g. the Proximity API also keeps the Unlock Key, we must
+keep a copy of it too, to allow GATT-based beacon unlocking).
+
 ```
-Beacons.add(new EddystoneEIDSpec(registrationResult.getIdentityKey(), rotationExponent,
-        registrationResult.getTimeOffset(), mode, txPowerLevel, name));
+mGattServer = new EddystoneGattServer(mPivotBeacon, new EddystoneGattServer.Listener() {
+    @Override
+    public void onGattFinished(EddystoneBase configuredBeacon) {
+        if (null != configuredBeacon) {
+            Beacons.add(configuredBeacon);
+        }
+    }
+}, new Loggable() {
+    @Override
+    public void log(String tag, final String message) {
+        // log however you need
+    }
+});
+
+// start with an empty UID advertiser with default settings.
+EddystoneUID currentBeacon = new EddystoneUID(new byte[16]);
+
+mEditLog.setText(String.format("Unlock Key:\n%s\n", Util.binToHex(currentBeacon.getLockKey(), 0, 16, ' ')));;
+
+mGattServer.start(mConfigActivity, currentBeacon);
+
+// ... when you are done
+
+mGattServer.close();
+// this must be done last
+Beacons.delete(mPivotBeacon.getId());
+
 ```
 
 ### Ephemeral URL
+
 An ephemeral URL broadcasts an Eddystone URL beacon, but can also dynamically change the broadcasted URL (and also even the target URL)
 
 Example for registering a new URL and on success, creating an Ephemeral URL beacon:
@@ -74,8 +115,8 @@ Beacons.uriio().registerUrl(url, temporaryPublicKey, new Beacons.OnResultListene
     public void onResult(Url result, Throwable error) {
         if (null != result) {
             // URL registered. We can now add a new Ephemeral beacon!
-            Beacons.add(new EphemeralURLSpec(result.getId(), result.getToken(),
-                    result.getUrl(), timeToLive, mode, txPowerLevel, name));
+            Beacons.add(new EphemeralURL(result.getId(), result.getToken(),
+                    result.getUrl(), timeToLive));
         }
         else {
             showError(error);
@@ -89,15 +130,13 @@ timeToLive property. If the TTL is zero, the beacon is not periodically updated 
 
 To update the target URL (with or without the need to change the beacon's other properties), use:
 ```
-// item is an existing UriioItem
+// item is an existing EphemeralURL
 Beacons.uriio().updateUrl(item.getUrlId(), item.getUrlToken(), url, new Beacons.OnResultListener<Url>() {
     @Override
     public void onResult(Url result, Throwable error) {
         if (null != result) {
             // URL target was updated. Save the new value to the local store. 
-            // fields that are not modified should be passed back from the current item
-            Beacons.editEphemeralURLBeacon(item, url, mode, txPowerLevel, timeToLive, name);
-            mConfigActivity.onConfigFinished(false);
+            item.edit().setLongUrl(result.getUrl()).apply()
         }
         else {
             showError(error);
@@ -106,14 +145,18 @@ Beacons.uriio().updateUrl(item.getUrlId(), item.getUrlToken(), url, new Beacons.
 });
 ```
 
-### iBeacon
-Adding an iBeacon:
+## Editing a beacon
+General pattern to update one or more properties:
+
 ```
-Beacons.add(new iBeaconSpec(uuid, major, minor, mode, txPowerLevel, name));
+beacon.edit()
+    .set*(value)
+    .set*(value)
+    .apply();
 ```
 
-## Editing a beacon
-To update details of a beacon, use the specialized ```Beacons.edit*()``` calls for now. Fields that you don't want to update should be read back from the item. A simpler approach is under way.
+Beacon will save and restart as needed.
+
 
 ### Deleting a beacon
 
@@ -128,10 +171,3 @@ A beacon can be in one of three states: Active, Paused, or Stopped. Use ```Beaco
 Retrieve the list of active and paused beacons by calling ```Beacons.getActive```
 Stopped beacons are saved to storage. To iterate over them, use ```Beacons.getStopped()``` to get a Cursor.
 While iterating over the cursor you can call ```Storage.itemFromCursor()``` to get actual items. 
-
-## Changelog
-1.2 (May 22, 2016)
-* API overhaul
-
-1.0 (May 5 2016)
-* Initial release

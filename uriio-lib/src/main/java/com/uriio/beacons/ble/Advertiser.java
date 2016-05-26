@@ -8,11 +8,12 @@ import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.os.Build;
 
 import com.uriio.beacons.Util;
+import com.uriio.beacons.model.Beacon;
 
 /** Base class for BLE advertisers. */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-public abstract class Beacon extends AdvertiseCallback {
-    private static final String TAG = "Beacon";
+public abstract class Advertiser extends AdvertiseCallback {
+    private static final String TAG = "Advertiser";
 
     public static final int STATUS_WAITING  = 0;
     public static final int STATUS_RUNNING  = 1;
@@ -20,16 +21,19 @@ public abstract class Beacon extends AdvertiseCallback {
     public static final int STATUS_STOPPED  = 3;
 
     private final AdvertiseSettings mAdvertiseSettings;
-    private final BLEAdvertiseManager mAdvertisersManager;
+    private final AdvertisersManager mAdvertisersManager;
+
     private AdvertiseSettings mSettingsInEffect = null;
     private int mStatus = STATUS_WAITING;
 
-    public Beacon(BLEAdvertiseManager advertiseManager, int advertiseMode, int txPowerLevel) {
+    public Advertiser(AdvertisersManager advertiseManager,
+                      @Beacon.AdvertiseMode int advertiseMode,
+                      @Beacon.AdvertiseTxPower int txPowerLevel, boolean connectable) {
         mAdvertisersManager = advertiseManager;
         mAdvertiseSettings = new AdvertiseSettings.Builder()
                 .setAdvertiseMode(advertiseMode)
                 .setTxPowerLevel(txPowerLevel)
-                .setConnectable(false)   // why is this true by default?
+                .setConnectable(connectable)
                 .build();
     }
 
@@ -37,14 +41,21 @@ public abstract class Beacon extends AdvertiseCallback {
     public void onStartSuccess(AdvertiseSettings settingsInEffect) {
         mStatus = STATUS_RUNNING;
         mSettingsInEffect = settingsInEffect;
-        mAdvertisersManager.onAdvertiserStarted(this);
+
+        if (null != mAdvertisersManager) {
+            mAdvertisersManager.onAdvertiserStarted(this);
+        }
     }
 
     @Override
     public void onStartFailure(int errorCode) {
-        mStatus = STATUS_FAILED;
         Util.log(TAG + " Advertise start/stop failed! Error code: " + errorCode + " - " + getErrorName(errorCode));
-        mAdvertisersManager.onAdvertiserFailed(this, errorCode);
+
+        mStatus = STATUS_FAILED;
+
+        if (null != mAdvertisersManager) {
+            mAdvertisersManager.onAdvertiserFailed(this, errorCode);
+        }
     }
 
     public AdvertiseSettings getAdvertiseSettings() {
@@ -89,7 +100,8 @@ public abstract class Beacon extends AdvertiseCallback {
         AdvertiseData advertiseData = getAdvertiseData();
         if (null != advertiseData) {
             try {
-                bleAdvertiser.startAdvertising(getAdvertiseSettings(), advertiseData, getAdvertiseScanResponse(), this);
+                bleAdvertiser.startAdvertising(getAdvertiseSettings(), advertiseData,
+                        getAdvertiseScanResponse(), this);
             } catch (IllegalStateException e) {
                 // tried to start advertising after Bluetooth was turned off
                 // let upper level notice that BT is off instead of reporting an error

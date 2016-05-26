@@ -37,10 +37,10 @@ public class LocalEIDResolver implements EIDResolver {
 
     /**
      * Server-side beacon registration
-     * @param beaconPublicKey    Beacon public key
-     * @param rotationExponent   Beacon time rotation scaler
-     * @param timeCounter        Beacon time counter
-     * @param ephemeralId        Beacon Ephemeral ID
+     * @param beaconPublicKey    Advertiser public key
+     * @param rotationExponent   Advertiser time rotation scaler
+     * @param timeCounter        Advertiser time counter
+     * @param ephemeralId        Advertiser Ephemeral ID
      * @return Registration result
      */
     @Override

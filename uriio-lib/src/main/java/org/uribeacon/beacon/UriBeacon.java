@@ -30,7 +30,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Represents a Uri Beacon from Bluetooth LE scan.
+ * Represents a Uri Advertiser from Bluetooth LE scan.
  */
 
 public class UriBeacon {
@@ -165,7 +165,7 @@ public class UriBeacon {
   }
 
   /**
-   * Parse scan record bytes to {@link UriBeacon}. <p/> The format is defined in Uri Beacon
+   * Parse scan record bytes to {@link UriBeacon}. <p/> The format is defined in Uri Advertiser
    * Definition.
    *
    * @param scanRecordBytes The scan record of Bluetooth LE advertisement and/or scan response.
@@ -322,7 +322,7 @@ public class UriBeacon {
     mUriString = uriString;
   }
 
-  private static String decodeUri(byte[] serviceData, int offset) {
+  public static String decodeUri(byte[] serviceData, int offset) {
     if (serviceData.length == offset) {
       return NO_URI;
     }

@@ -7,10 +7,15 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.util.Base64;
 
-import com.uriio.beacons.model.BaseItem;
-import com.uriio.beacons.model.EddystoneItem;
-import com.uriio.beacons.model.UriioItem;
-import com.uriio.beacons.model.iBeaconItem;
+import com.uriio.beacons.model.Beacon;
+import com.uriio.beacons.model.EddystoneBase;
+import com.uriio.beacons.model.EddystoneEID;
+import com.uriio.beacons.model.EddystoneUID;
+import com.uriio.beacons.model.EddystoneURL;
+import com.uriio.beacons.model.EphemeralURL;
+import com.uriio.beacons.model.iBeacon;
+
+import java.nio.ByteBuffer;
 
 /**
  * Database manager.
@@ -29,13 +34,15 @@ public class Storage extends SQLiteOpenHelper {
     private static final String IBEACONS_TABLE  = "ib";
     private static final String URIIO_TABLE     = "uriio";
 
-    private static final int DATABASE_SCHEMA_VERSION = 5;
+    private static final int DATABASE_SCHEMA_VERSION = 6;
 
     private static Storage _instance;
 
     /** lazy SQLite statements **/
     private SQLiteStatement mInsertItemStmt = null;
     private SQLiteStatement mInsertUriioItemStmt = null;
+    private SQLiteStatement mInsertEddystoneItemStmt = null;
+    private SQLiteStatement mInsertAppleBeaconItemStmt = null;
     private SQLiteStatement mUpdateShortUrlStmt = null;
     private SQLiteStatement mUpdateStateStmt = null;
 
@@ -65,7 +72,7 @@ public class Storage extends SQLiteOpenHelper {
 
         // url - either the full URL or the base64 raw UID payload [Namespace]Instance
         // domain - what domain to use to generate the Namespace; if null, Namespace is already in the 'url' field
-        db.execSQL("CREATE TABLE " + EDDYSTONE_TABLE + " (url TEXT, domain TEXT)");
+        db.execSQL("CREATE TABLE " + EDDYSTONE_TABLE + " (url TEXT, domain TEXT, lockKey BLOB)");
 
         db.execSQL("CREATE TABLE " + IBEACONS_TABLE + " (uuid TEXT, maj INTEGER, min INTEGER)");
 
@@ -100,6 +107,10 @@ public class Storage extends SQLiteOpenHelper {
             // added 'privateKey' column to uriio table (no entries should exist though)
             db.execSQL("ALTER TABLE " + URIIO_TABLE + " ADD COLUMN privateKey TEXT");
         }
+
+        if (oldVersion < 6) {
+            db.execSQL("ALTER TABLE " + EDDYSTONE_TABLE + " ADD COLUMN lockKey BLOB");
+        }
     }
 
     @Override
@@ -117,6 +128,16 @@ public class Storage extends SQLiteOpenHelper {
         if (null != mInsertUriioItemStmt) {
             mInsertUriioItemStmt.close();
             mInsertUriioItemStmt = null;
+        }
+
+        if (null != mInsertAppleBeaconItemStmt) {
+            mInsertAppleBeaconItemStmt.close();
+            mInsertAppleBeaconItemStmt = null;
+        }
+
+        if (null != mInsertEddystoneItemStmt) {
+            mInsertEddystoneItemStmt.close();
+            mInsertEddystoneItemStmt = null;
         }
 
         if (null != mUpdateShortUrlStmt) {
@@ -149,11 +170,11 @@ public class Storage extends SQLiteOpenHelper {
     }
 
     /**
-     * @param flags - 0 to use Eddystone format, 1 to use  URIBeacon format
-     * @param name
+     * Inserts a new Ephemeral URL entry.
+     * @param item
+     * @return Inserted item ID.
      */
-    public long insertUriioItem(long urlId, String urlToken, String longUrl, byte[] privateKey,
-                                int mode, int txPowerLevel, int ttl, int flags, String name) {
+    public long insertUriioItem(EphemeralURL item) {
         SQLiteDatabase db = getWritableDatabase();
 
         if (null == mInsertUriioItemStmt) {
@@ -161,11 +182,13 @@ public class Storage extends SQLiteOpenHelper {
                     " (rowid, key, longUrl, urlId, ttl, privateKey) VALUES (?, ?, ?, ?, ?, ?)");
         }
 
-        mInsertUriioItemStmt.bindString(2, urlToken);
-        mInsertUriioItemStmt.bindString(3, longUrl);
-        mInsertUriioItemStmt.bindLong(4, urlId);
-        mInsertUriioItemStmt.bindLong(5, ttl);
+        mInsertUriioItemStmt.bindString(2, item.getUrlToken());
+        mInsertUriioItemStmt.bindString(3, item.getLongUrl());
+        mInsertUriioItemStmt.bindLong(4, item.getUrlId());
+        mInsertUriioItemStmt.bindLong(5, item.getTimeToLive());
 
+        // fixme - consider saving the AES key if possible
+        byte[] privateKey = null;
         if (null == privateKey) {
             mInsertUriioItemStmt.bindNull(6);
         }
@@ -174,60 +197,63 @@ public class Storage extends SQLiteOpenHelper {
                     Base64.NO_PADDING | Base64.URL_SAFE | Base64.NO_WRAP));
         }
 
-        return insertByKind(db, KIND_URIIO, mode, txPowerLevel, flags, name, mInsertUriioItemStmt);
+        return insertByKind(db, item, mInsertUriioItemStmt);
     }
 
     /**
-     * @param payload URL or base64 UUID
-     * @param flags 0xPQ where p is frame type (0 for URL, 1 for UID), and Q is beacon type (0 for Eddystone, 1 for URIBeacon)
-     * @param name
+     * Inserts a new Eddystone item into the database.
+     * @param item    Eddystone item, either an URL, UID, or EID instance.
+     * @return  The inserted item ID
      */
-    public long insertEddystoneItem(int mode, int txPowerLevel, String payload, int flags, String name, String domain) {
+    public long insertEddystoneItem(EddystoneBase item) {
         SQLiteDatabase db = getWritableDatabase();
 
-        SQLiteStatement stmtInsertEddystone = db.compileStatement("INSERT INTO " + EDDYSTONE_TABLE + " (rowid, url, domain) VALUES (?, ?, ?)");
-        stmtInsertEddystone.bindString(2, payload);
+        if (null == mInsertEddystoneItemStmt) {
+            mInsertEddystoneItemStmt = db.compileStatement("INSERT INTO " + EDDYSTONE_TABLE +
+                    " (rowid, url, domain, lockKey) VALUES (?, ?, ?, ?)");
+        }
+        mInsertEddystoneItemStmt.bindString(2, getEddystonePayload(item));
+
+        String domain = item.getType() == Beacon.EDDYSTONE_UID ? ((EddystoneUID) item).getDomainHint() : null;
         if (null == domain) {
-            stmtInsertEddystone.bindNull(3);
+            mInsertEddystoneItemStmt.bindNull(3);
         }
         else {
-            stmtInsertEddystone.bindString(3, domain);
+            mInsertEddystoneItemStmt.bindString(3, domain);
         }
 
-        long id = insertByKind(db, KIND_EDDYSTONE, mode, txPowerLevel, flags, name, stmtInsertEddystone);
-        stmtInsertEddystone.close();
+        mInsertEddystoneItemStmt.bindBlob(4, item.getLockKey());
 
-        return id;
+        return insertByKind(db, item, mInsertEddystoneItemStmt);
     }
 
-    /**
-     * @param flags Company code flag. 0 for Apple iBeacon, 1 for AltBeacon (0xBEAC)
-     * @param name
-     */
-    public long insertAppleBeaconItem(int mode, int txPowerLevel, String base64Uuid, int major, int minor, int flags, String name) {
+    public long insertAppleBeaconItem(iBeacon item) {
         SQLiteDatabase db = getWritableDatabase();
 
-        SQLiteStatement stmt = db.compileStatement("INSERT INTO " + IBEACONS_TABLE + " (rowid, uuid, maj, min) VALUES (?, ?, ?, ?)");
-        stmt.bindString(2, base64Uuid);
-        stmt.bindLong(3, major);
-        stmt.bindLong(4, minor);
+        if (null == mInsertAppleBeaconItemStmt) {
+            mInsertAppleBeaconItemStmt = db.compileStatement("INSERT INTO " + IBEACONS_TABLE +
+                    " (rowid, uuid, maj, min) VALUES (?, ?, ?, ?)");
+        }
+        mInsertAppleBeaconItemStmt.bindString(2, Base64.encodeToString(item.getUuidRaw(), Base64.NO_PADDING));
+        mInsertAppleBeaconItemStmt.bindLong(3, item.getMajor());
+        mInsertAppleBeaconItemStmt.bindLong(4, item.getMinor());
 
-        long id = insertByKind(db, KIND_IBEACON, mode, txPowerLevel, flags, name, stmt);
-        stmt.close();
-
-        return id;
+        return insertByKind(db, item, mInsertAppleBeaconItemStmt);
     }
 
-    private long insertByKind(SQLiteDatabase db, long kind, int mode, int txPowerLevel, int flags, String name, SQLiteStatement stmt) {
+    private long insertByKind(SQLiteDatabase db, Beacon item, SQLiteStatement stmt) {
         long rowid = 0;
 
         db.beginTransaction();
         try {
-            rowid = insertItem(db, kind, mode, txPowerLevel, flags, name);
+            rowid = insertItem(db, item.getKind(), item.getAdvertiseMode(),
+                    item.getTxPowerLevel(), item.getFlags(), item.getName());
             if (rowid > 0) {
                 stmt.bindLong(1, rowid);
                 stmt.executeInsert();
                 db.setTransactionSuccessful();
+
+                item.setId(rowid);
             }
         }
         finally {
@@ -237,16 +263,23 @@ public class Storage extends SQLiteOpenHelper {
         return rowid;
     }
 
-    public void updateUriioItemShortUrl(long itemId, String shortUrl, long expireTimestamp) {
+    public void updateUriioItemShortUrl(EphemeralURL item) {
         SQLiteDatabase db = getWritableDatabase();
 
         if (null == mUpdateShortUrlStmt) {
             mUpdateShortUrlStmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET shortUrl=?, expires=? WHERE rowid=?");
         }
-        if (null == shortUrl) mUpdateShortUrlStmt.bindNull(1);
-        else mUpdateShortUrlStmt.bindString(1, shortUrl);
-        mUpdateShortUrlStmt.bindLong(2, expireTimestamp);
-        mUpdateShortUrlStmt.bindLong(3, itemId);
+
+        String shortUrl = item.getURL();
+        if (null == shortUrl) {
+            mUpdateShortUrlStmt.bindNull(1);
+        }
+        else {
+            mUpdateShortUrlStmt.bindString(1, shortUrl);
+        }
+
+        mUpdateShortUrlStmt.bindLong(2, item.getActualExpireTime());
+        mUpdateShortUrlStmt.bindLong(3, item.getId());
 
         mUpdateShortUrlStmt.executeUpdateDelete();
     }
@@ -292,7 +325,7 @@ public class Storage extends SQLiteOpenHelper {
 
     public Cursor getAllItems(boolean stopped) {
         // if we ever use this in a CursorAdapter, the rowid column should also be aliased to '_id'
-        return getReadableDatabase().rawQuery(String.format("SELECT i.rowid, key, longUrl, created, state, shortUrl, expires, advMode, txLevel, urlId, ttl, flags, kind, url, uuid, maj, min, name, domain, privateKey" +
+        return getReadableDatabase().rawQuery(String.format("SELECT i.rowid, key, longUrl, created, state, shortUrl, expires, advMode, txLevel, urlId, ttl, flags, kind, url, uuid, maj, min, name, domain, lockKey" +
                 " FROM " + ITEMS_TABLE + " i" +
                 " LEFT OUTER JOIN " + URIIO_TABLE + " u ON i.rowid=u.rowid" +
                 " LEFT OUTER JOIN " + EDDYSTONE_TABLE + " e ON i.rowid=e.rowid" +
@@ -301,7 +334,7 @@ public class Storage extends SQLiteOpenHelper {
     }
 
     public Cursor getItem(long itemId) {
-        return getReadableDatabase().rawQuery("SELECT i.rowid, key, longUrl, created, state, shortUrl, expires, advMode, txLevel, urlId, ttl, flags, kind, url, uuid, maj, min, name, domain, privateKey" +
+        return getReadableDatabase().rawQuery("SELECT i.rowid, key, longUrl, created, state, shortUrl, expires, advMode, txLevel, urlId, ttl, flags, kind, url, uuid, maj, min, name, domain, lockKey" +
                     " FROM " + ITEMS_TABLE + " i" +
                     " LEFT OUTER JOIN " + URIIO_TABLE + " u ON i.rowid=u.rowid" +
                     " LEFT OUTER JOIN " + EDDYSTONE_TABLE + " e ON i.rowid=e.rowid" +
@@ -310,13 +343,17 @@ public class Storage extends SQLiteOpenHelper {
                 new String[] { String.valueOf(itemId)});
     }
 
-    public static BaseItem itemFromCursor(Cursor cursor) {
-        BaseItem item = null;
+    public static Beacon itemFromCursor(Cursor cursor) {
+        Beacon item = null;
 
         long itemId = cursor.getLong(0);
         int flags = cursor.getInt(11);
         int kind = cursor.getInt(12);
         String name = cursor.getString(17);
+
+        // todo - clamp these just to make sure
+        @Beacon.AdvertiseMode int advertiseMode = cursor.getInt(7);
+        @Beacon.AdvertiseTxPower int txPowerLevel = cursor.getInt(8);
 
         if (kind == KIND_URIIO) {
             String urlToken = cursor.getString(1);
@@ -326,85 +363,153 @@ public class Storage extends SQLiteOpenHelper {
             int ttl = cursor.getInt(10);
             String shortUrl = cursor.getString(5);
 
-            byte[] privateKey = null;
-            String pk = cursor.getString(19);
-            if (pk != null && pk.length() > 0) {
-                privateKey = Base64.decode(pk, Base64.URL_SAFE);
-            }
-
-            item = new UriioItem(itemId, flags, urlId, urlToken, ttl, expires, shortUrl, longUrl, privateKey);
+            item = new EphemeralURL(itemId, urlId, urlToken, ttl, longUrl, expires, shortUrl, advertiseMode, txPowerLevel, name);
         } else if (kind == KIND_EDDYSTONE) {
-            item = new EddystoneItem(itemId, flags, cursor.getString(13), cursor.getString(18));
+            byte[] lockKey = null;
+            if (!cursor.isNull(19)) {
+                lockKey = cursor.getBlob(19);
+            }
+            item = loadEddystone(itemId, advertiseMode, txPowerLevel, flags, name,
+                    cursor.getString(13), cursor.getString(18), lockKey);
         } else if (kind == KIND_IBEACON) {
-            byte[] rawUuid = Base64.decode(cursor.getString(14), Base64.DEFAULT);
-            item = new iBeaconItem(itemId, flags, rawUuid, cursor.getInt(15), cursor.getInt(16));
+            byte[] uuid = Base64.decode(cursor.getString(14), Base64.DEFAULT);
+            item = new iBeacon(itemId, uuid, cursor.getInt(15), cursor.getInt(16), advertiseMode, txPowerLevel, flags, name);
         }
 
         if (null != item) {
-            item.setAdvertiseMode(cursor.getInt(7));
-            item.setTxPowerLevel(cursor.getInt(8));
-            item.setName(name);
             item.setStorageState(cursor.getInt(4));
         }
 
         return item;
     }
 
-    public void updateIBeaconItem(long id, int mode, int txPowerLevel, int flags, String name, byte[] uuid, int major, int minor) {
+    public void updateIBeaconItem(iBeacon item) {
+        long id = item.getId();
+
         SQLiteDatabase db = getWritableDatabase();
 
         // todo - transact
-        updateItem(db, id, mode, txPowerLevel, flags, name);
+        updateItem(db, item);
 
         SQLiteStatement stmt = db.compileStatement("UPDATE " + IBEACONS_TABLE + " SET uuid=?, maj=?, min=? WHERE rowid=?");
-        stmt.bindString(1, Base64.encodeToString(uuid, Base64.NO_PADDING | Base64.NO_WRAP));
-        stmt.bindLong(2, major);
-        stmt.bindLong(3, minor);
+        stmt.bindString(1, Base64.encodeToString(item.getUuidRaw(), Base64.NO_PADDING | Base64.NO_WRAP));
+        stmt.bindLong(2, item.getMajor());
+        stmt.bindLong(3, item.getMinor());
         stmt.bindLong(4, id);
 
         stmt.executeUpdateDelete();
     }
 
-    public void updateEddystoneItem(long id, int mode, int txPowerLevel, String url, int flags, String name, String domain) {
+    public void updateEddystoneItem(EddystoneBase item) {
         SQLiteDatabase db = getWritableDatabase();
 
         // todo - transact
-        updateItem(db, id, mode, txPowerLevel, flags, name);
+        updateItem(db, item);
 
         SQLiteStatement stmtUpdateEddystone = db.compileStatement("UPDATE " + EDDYSTONE_TABLE + " SET url=?, domain=? WHERE rowid=?");
-        stmtUpdateEddystone.bindString(1, url);
+        stmtUpdateEddystone.bindString(1, getEddystonePayload(item));
+
+        String domain = item.getType() == Beacon.EDDYSTONE_UID ? ((EddystoneUID) item).getDomainHint() : null;
         if (null == domain) {
             stmtUpdateEddystone.bindNull(2);
         } else {
             stmtUpdateEddystone.bindString(2, domain);
         }
-        stmtUpdateEddystone.bindLong(3, id);
+
+        stmtUpdateEddystone.bindLong(3, item.getId());
 
         stmtUpdateEddystone.executeUpdateDelete();
     }
 
-    public void updateUriioItem(long id, int mode, int txPowerLevel, int flags, String name, String url, int timeToLive) {
+    public void updateUriioItem(EphemeralURL item) {
+        long id = item.getId();
+
         SQLiteDatabase db = getWritableDatabase();
 
         // todo - transact
-        updateItem(db, id, mode, txPowerLevel, flags, name);
+        updateItem(db, item);
 
         SQLiteStatement stmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET ttl=?, longUrl=? WHERE rowid=?");
-        stmt.bindLong(1, timeToLive);
-        stmt.bindString(2, url);
+        stmt.bindLong(1, item.getTimeToLive());
+        stmt.bindString(2, item.getLongUrl());
         stmt.bindLong(3, id);
 
         stmt.executeUpdateDelete();
     }
 
-    private void updateItem(SQLiteDatabase db, long id, int mode, int txPowerLevel, int flags, String name) {
+    private void updateItem(SQLiteDatabase db, Beacon item) {
         SQLiteStatement stmt = db.compileStatement("UPDATE " + ITEMS_TABLE + " SET advMode=?, txLevel=?, flags=?, name=? WHERE rowid=?");
-        stmt.bindLong(1, mode);
-        stmt.bindLong(2, txPowerLevel);
-        stmt.bindLong(3, flags);
-        stmt.bindString(4, name);
-        stmt.bindLong(5, id);
+        stmt.bindLong(1, item.getAdvertiseMode());
+        stmt.bindLong(2, item.getTxPowerLevel());
+        stmt.bindLong(3, item.getFlags());
+
+        String name = item.getName();
+        if (null == name) stmt.bindNull(4);
+        else stmt.bindString(4, name);
+
+        stmt.bindLong(5, item.getId());
 
         stmt.executeUpdateDelete();
+    }
+
+    public void save(Beacon item) {
+        switch (item.getKind()) {
+            case KIND_EDDYSTONE:
+                updateEddystoneItem((EddystoneBase) item);
+                break;
+            case KIND_IBEACON:
+                updateIBeaconItem((iBeacon) item);
+                break;
+            case KIND_URIIO:
+                updateUriioItem((EphemeralURL) item);
+                break;
+        }
+    }
+
+    private static EddystoneBase loadEddystone(long id, @Beacon.AdvertiseMode int advertiseMode,
+                                               @Beacon.AdvertiseTxPower int txPowerLevel, int flags,
+                                               String name, String payload, String domain, byte[] lockKey) {
+        int type = flags >>> 4;
+
+        switch (type) {
+            case Beacon.EDDYSTONE_URL:
+                return new EddystoneURL(id, payload, lockKey, advertiseMode, txPowerLevel, name);
+            case Beacon.EDDYSTONE_UID:
+                byte[] data;
+                return new EddystoneUID(id, Base64.decode(payload, Base64.DEFAULT), domain, lockKey,
+                        advertiseMode, txPowerLevel, name);
+            case Beacon.EDDYSTONE_EID:
+                data = Base64.decode(payload, Base64.DEFAULT);
+                int eidTimeOffset = ByteBuffer.wrap(data, 16, 4).getInt();
+
+                // sanitize time offset to match range; see EIDUtils.register()
+                eidTimeOffset = Math.min(255, Math.max(-65280, eidTimeOffset));
+
+                // sanitize rotation exponent to [0, 15] range
+                byte rotationExponent = (byte) (data[20] & 0x0f);
+                return new EddystoneEID(id, data, rotationExponent, eidTimeOffset, lockKey,
+                        advertiseMode, txPowerLevel, name);
+        }
+
+        return null;
+    }
+
+    private String getEddystonePayload(EddystoneBase beacon) {
+        switch (beacon.getType()) {
+            case Beacon.EDDYSTONE_EID:
+                EddystoneEID eddystoneEID = (EddystoneEID) beacon;
+                // serialize beacon into storage blob
+                byte[] data = new byte[21];
+                System.arraycopy(eddystoneEID.getIdentityKey(), 0, data, 0, 16);
+                ByteBuffer.wrap(data, 16, 4).putInt(eddystoneEID.getEidTimeOffset());
+                data[20] = eddystoneEID.getRotationExponent();
+
+                return Base64.encodeToString(data, Base64.NO_PADDING);
+            case Beacon.EDDYSTONE_URL:
+                return ((EddystoneURL) beacon).getURL();
+            case Beacon.EDDYSTONE_UID:
+                return Base64.encodeToString(((EddystoneUID) beacon).getNamespaceInstance(), Base64.NO_PADDING);
+        }
+        return null;
     }
 }

@@ -4,20 +4,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
-import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
-import android.util.Base64;
 import android.util.Log;
 
 import com.uriio.beacons.api.ApiClient;
-import com.uriio.beacons.ble.AppleBeacon;
-import com.uriio.beacons.ble.EddystoneBeacon;
-import com.uriio.beacons.model.BaseItem;
-import com.uriio.beacons.model.EddystoneItem;
-import com.uriio.beacons.model.UriioItem;
-import com.uriio.beacons.model.iBeaconItem;
+import com.uriio.beacons.model.Beacon;
+import com.uriio.beacons.model.EddystoneBase;
+import com.uriio.beacons.model.EphemeralURL;
+import com.uriio.beacons.model.iBeacon;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,11 +49,11 @@ public class Beacons {
     private final ApiClient mUriioClient;
 
     /** List of active items **/
-    private List<BaseItem> mActiveItems = new ArrayList<>();
+    private List<Beacon> mActiveItems = new ArrayList<>();
 
     private Beacons(Context context, String apiKey) {
         mAppContext = context.getApplicationContext();
-        mUriioClient = new ApiClient(apiKey);
+        mUriioClient = null == apiKey ? null : new ApiClient(apiKey);
     }
 
     static Beacons getInstance() {
@@ -73,25 +68,13 @@ public class Beacons {
         // restore from saved config
         SharedPreferences sharedPrefs = context.getSharedPreferences(PREFS_FILENAME, 0);
         String apiKey = sharedPrefs.getString(PREF_API_KEY, null);
-        if (apiKey != null) {
-            initialize(context, apiKey, sharedPrefs.getString(PREF_DB_NAME, DEFAULT_DATABASE_NAME));
-        }
-    }
-
-    /**
-     * Initialize the API with the default persistence namespace.
-     * @param context   The calling context from which to get the application context.
-     * @param apiKey    Your API Key
-     */
-    @SuppressWarnings("unused")
-    public static void initialize(Context context, String apiKey) {
-        initialize(context, apiKey, DEFAULT_DATABASE_NAME);
+        initialize(context, apiKey, sharedPrefs.getString(PREF_DB_NAME, DEFAULT_DATABASE_NAME));
     }
 
     /**
      * Initialize the API and use a custom persistence namespace.
      * @param context   The calling context from which to get the application context.
-     * @param apiKey    Your API Key
+     * @param apiKey    Your API Key. May be null if you don't intend to use Ephemeral URLs.
      * @param dbName    Database name to use for opening and storing beacons.
      */
     public static void initialize(Context context, String apiKey, String dbName) {
@@ -109,7 +92,7 @@ public class Beacons {
             // restore active items
             Cursor cursor = Storage.getInstance().getAllItems(false);
             while (cursor.moveToNext()) {
-                BaseItem item = Storage.itemFromCursor(cursor);
+                Beacon item = Storage.itemFromCursor(cursor);
                 getActive().add(item);
             }
             cursor.close();
@@ -119,34 +102,60 @@ public class Beacons {
         }
     }
 
-    public static BaseItem add(BeaconSpec beaconSpec) {
-        switch (beaconSpec.getType()) {
-            case BeaconSpec.EDDYSTONE_UID:
-                return addEddystoneUIDBeacon((EddystoneUIDSpec) beaconSpec);
-            case BeaconSpec.EDDYSTONE_URL:
-                return addEddystoneURLBeacon((EddystoneURLSpec) beaconSpec);
-            case BeaconSpec.EDDYSTONE_EID:
-                return addEddystoneEIDBeacon((EddystoneEIDSpec) beaconSpec);
-            case BeaconSpec.EPHEMERAL_URL:
-                return addEphemeralURLBeacon((EphemeralURLSpec) beaconSpec);
-            case BeaconSpec.IBEACON:
-                return addiBeacon((iBeaconSpec) beaconSpec);
-        }
-        return null;
+    /**
+     * Initialize the API with the default persistence namespace.
+     * @param context   The calling context from which to get the application context.
+     * @param apiKey    Your API Key. May be null if you don't intend to use Ephemeral URLs.
+     */
+    @SuppressWarnings("unused")
+    public static void initialize(Context context, String apiKey) {
+        initialize(context, apiKey, DEFAULT_DATABASE_NAME);
     }
 
-    @SuppressWarnings("unused")
-    public static void delete(long itemId) {
-        Storage.getInstance().deleteItem(itemId);
+    public static void initialize(Context context) {
+        initialize(context, null);
+    }
 
-        if (findActive(itemId) != null) {
-            sendStateBroadcast(itemId);
+    public static Beacon add(Beacon spec/*, boolean persistent*/) {
+        if (true/*persistent*/) {
+            switch (spec.getType()) {
+                case Beacon.EDDYSTONE_URL:
+                case Beacon.EDDYSTONE_UID:
+                case Beacon.EDDYSTONE_EID:
+                    Storage.getInstance().insertEddystoneItem((EddystoneBase) spec);
+                    break;
+                case Beacon.EPHEMERAL_URL:
+                    Storage.getInstance().insertUriioItem((EphemeralURL) spec);
+                    break;
+                case Beacon.IBEACON:
+                    Storage.getInstance().insertAppleBeaconItem((iBeacon) spec);
+                    break;
+            }
+        }
+
+        getInstance().mActiveItems.add(spec);
+        setState(spec.getId(), Storage.STATE_ENABLED);
+
+        return spec;
+    }
+
+    /**
+     * Deletes a beacon. If beacon is active, it will be stopped.
+     * @param id    The beacon ID
+     */
+    public static void delete(long id) {
+        Storage.getInstance().deleteItem(id);
+
+        Beacon item = findActive(id);
+        if (item != null) {
+            item.setStorageState(Storage.STATE_STOPPED);
+            sendStateBroadcast(id);
         }
     }
 
     public static void setState(long itemId, int state) {
         if (state >= 0 && state <= 2) {
-            BaseItem item = findActive(itemId);
+            Beacon item = findActive(itemId);
             if (null != item) {
                 if (state != item.getStorageState()) {
                     item.setStorageState(state);
@@ -168,17 +177,30 @@ public class Beacons {
         }
     }
 
-    public static BaseItem findActive(long itemId) {
-        for (BaseItem item : getActive()) {
-            if (item.getId() == itemId) {
+    /**
+     * @param id    The beacon ID
+     * @return  A beacon instance, either currently active, or loaded from persistent storage.
+     */
+    public static Beacon get(long id) {
+        Beacon beacon = findActive(id);
+        return null == beacon ? loadItem(id) : beacon;
+    }
+
+    /**
+     * @param id    The beacon ID
+     * @return Active (or paused) beacon, or null if beacon is stopped (or doesn't exist).
+     */
+    public static Beacon findActive(long id) {
+        for (Beacon item : getActive()) {
+            if (item.getId() == id) {
                 return item;
             }
         }
         return null;
     }
 
-    public static BaseItem loadItem(long itemId) {
-        BaseItem item = null;
+    private static Beacon loadItem(long itemId) {
+        Beacon item = null;
 
         Cursor cursor = Storage.getInstance().getItem(itemId);
         if (cursor.moveToNext()) {
@@ -189,90 +211,25 @@ public class Beacons {
         return item;
     }
 
-    public static void editEddystoneURLBeacon(EddystoneItem item, String url, @BeaconSpec.AdvertiseMode int mode,
-                                              @BeaconSpec.AdvertiseTxPower int txPowerLevel, String name) {
-        int flags = EddystoneBeacon.FLAG_EDDYSTONE;
-        Storage.getInstance().updateEddystoneItem(item.getId(), mode, txPowerLevel, url, flags, name, null);
-        item.update(mode, txPowerLevel, flags, name, url, null);
-
-        restartBeacon(item);
-    }
-
-    /** Updates an UID beacon. */
-    public static void editEddystoneUIDBeacon(EddystoneItem item, byte[] namespaceInstance,
-                                              @BeaconSpec.AdvertiseMode int mode,
-                                              @BeaconSpec.AdvertiseTxPower int txPowerLevel, String name,
-                                              String domainHint) {
-        String payload = Base64.encodeToString(namespaceInstance, Base64.NO_PADDING);
-
-        Storage.getInstance().updateEddystoneItem(item.getId(), mode, txPowerLevel, payload, item.getFlags(), name, domainHint);
-        item.update(mode, txPowerLevel, item.getFlags(), name, payload, domainHint);
-
-        restartBeacon(item);
-    }
-
-    public static void editEddystoneEIDBeacon(EddystoneItem item, @BeaconSpec.AdvertiseMode int mode,
-                                              @BeaconSpec.AdvertiseTxPower int txPowerLevel, String name) {
-        Storage.getInstance().updateEddystoneItem(item.getId(), mode, txPowerLevel, item.getPayload(), item.getFlags(), name, null);
-        item.update(mode, txPowerLevel, item.getFlags(), name, item.getPayload(), null);
-
-        restartBeacon(item);
-    }
-
-    public static void editEphemeralURLBeacon(UriioItem item, String url,
-                                              @BeaconSpec.AdvertiseMode int mode,
-                                              @BeaconSpec.AdvertiseTxPower int txPowerLevel,
-                                              int timeToLive, String name) {
-        boolean modeOrPowerChanged = item.updateBroadcastingOptions(mode, txPowerLevel);
-        boolean nameChanged = item.setName(name);
-        boolean ttlChanged = item.updateTTL(timeToLive);
-        boolean urlChanged = item.updateLongUrl(url);
-
-        // watch out - don't inline the checks - condition may short-circuit!!!
-        if (modeOrPowerChanged || nameChanged || ttlChanged || urlChanged) {
-            Storage.getInstance().updateUriioItem(item.getId(), mode, txPowerLevel,
-                    EddystoneBeacon.FLAG_EDDYSTONE, name, url, timeToLive);
+    public static void saveItem(Beacon item, boolean restartBeacon) {
+        if (item.getId() > 0) {
+            Storage.getInstance().save(item);
         }
 
-        if (item.getStatus() == BaseItem.STATUS_ADVERTISING) {
-            if (ttlChanged) {
-                // force a short URL issue since TTL changed
-                item.updateShortUrl(null, 0);
-                Storage.getInstance().updateUriioItemShortUrl(item.getId(), null, 0);
-                restartBeacon(item);
-            }
-            else if (modeOrPowerChanged) {
-                // recreate the beacon, keep the same short URL until it expires (alarm triggers)
-                restartBeacon(item);
-            }
-        }
-    }
-
-    public static void updateEphemeralURLBeacon(UriioItem item, String shortUrl, long expireTime) {
-        // update memory model
-        item.updateShortUrl(shortUrl, expireTime);
-
-        // update database
-        Storage.getInstance().updateUriioItemShortUrl(item.getId(), shortUrl, expireTime);
-    }
-
-    public static void editiBeacon(iBeaconItem item, byte[] uuid, int major, int minor,
-                                   @BeaconSpec.AdvertiseMode int mode,
-                                   @BeaconSpec.AdvertiseTxPower int txPowerLevel, String name) {
-        Storage.getInstance().updateIBeaconItem(item.getId(), mode, txPowerLevel, AppleBeacon.FLAG_APPLE, name, uuid, major, minor);
-        item.update(mode, txPowerLevel, uuid, major, minor, name);
-
-        if (item.getStatus() == BaseItem.STATUS_ADVERTISING) {
-            // todo - only do this if frequency / power / payload changed
+        if (restartBeacon) {
             restartBeacon(item);
         }
     }
 
+    public static Storage getStorage() {
+        return Storage.getInstance();
+    }
+
     /**
      * @return The collection of all active items. Not all items might actually be broadcasting.
-     * To check if an item is broadcasting call getBeacon() on it.
+     * To check if an item is broadcasting call getAdvertiser() on it.
      */
-    public static List<BaseItem> getActive() {
+    public static List<Beacon> getActive() {
         return getInstance().mActiveItems;
     }
 
@@ -281,72 +238,11 @@ public class Beacons {
     }
 
     /**
-     * @return Interface to an UriIO API client, used to register, update, and issue ephemeral URLs.
+     * Interface to an UriIO API client, used to register, update, and issue ephemeral URLs.
+     * @return API client, or null if there was no API Key specified at initialize time.
      */
     public static ApiClient uriio() {
         return getInstance().mUriioClient;
-    }
-
-    private static EddystoneItem addEddystoneURLBeacon(EddystoneURLSpec spec)
-    {
-        int flags = EddystoneBeacon.FLAG_EDDYSTONE;
-        //noinspection PointlessBitwiseExpression
-        flags |= EddystoneBeacon.FLAG_FRAME_URL << 4;
-
-        return storeEddystone(spec.getAdvertiseMode(), spec.getAdvertiseTxPowerLevel(), flags,
-                spec.getName(), spec.getURL(), null);
-    }
-
-    private static EddystoneItem addEddystoneUIDBeacon(EddystoneUIDSpec spec) {
-        if (spec.getNamespaceInstance().length != 16) return null;
-
-        int flags = EddystoneBeacon.FLAG_EDDYSTONE;
-        flags |= EddystoneBeacon.FLAG_FRAME_UID << 4;
-
-        String payload = Base64.encodeToString(spec.getNamespaceInstance(), Base64.NO_PADDING);
-
-        return storeEddystone(spec.getAdvertiseMode(), spec.getAdvertiseTxPowerLevel(), flags,
-                spec.getName(), payload, spec.getDomainHint());
-    }
-
-    private static EddystoneItem addEddystoneEIDBeacon(EddystoneEIDSpec spec) {
-        int flags = EddystoneBeacon.FLAG_EDDYSTONE;
-        flags |= EddystoneBeacon.FLAG_FRAME_EID << 4;
-
-        // serialize beacon into storage blob
-        byte[] data = new byte[21];
-        System.arraycopy(spec.getIdentityKey(), 0, data, 0, 16);
-        ByteBuffer.wrap(data, 16, 4).putInt(spec.getTimeOffset());
-        data[20] = spec.getRotationExponent();
-
-        String payload = Base64.encodeToString(data, Base64.NO_PADDING);
-
-        return storeEddystone(spec.getAdvertiseMode(), spec.getAdvertiseTxPowerLevel(), flags,
-                spec.getName(), payload,  null);
-    }
-
-    private static UriioItem addEphemeralURLBeacon(EphemeralURLSpec spec) {
-        return storeUriio(spec.getUrlId(), spec.getUrlToken(), spec.getLongUrl(),
-                null, spec.getAdvertiseMode(), spec.getAdvertiseTxPowerLevel(), spec.getTtl(),
-                spec.getName());
-    }
-
-    private static iBeaconItem addiBeacon(iBeaconSpec spec) {
-        int flags = AppleBeacon.FLAG_APPLE;
-        long itemId = Storage.getInstance().insertAppleBeaconItem(spec.getAdvertiseMode(),
-                spec.getAdvertiseTxPowerLevel(),
-                Base64.encodeToString(spec.getUuid(), Base64.NO_PADDING), spec.getMajor(),
-                spec.getMinor(), flags, spec.getName());
-
-        iBeaconItem item = new iBeaconItem(itemId, flags, spec.getUuid(), spec.getMajor(), spec.getMinor());
-        item.setAdvertiseMode(spec.getAdvertiseMode());
-        item.setTxPowerLevel(spec.getAdvertiseTxPowerLevel());
-        item.setName(spec.getName());
-
-        getInstance().mActiveItems.add(item);
-        setState(item.getId(), Storage.STATE_ENABLED);
-
-        return item;
     }
 
     private static void sendStateBroadcast(long itemId) {
@@ -354,46 +250,9 @@ public class Beacons {
             new Intent(BleService.ACTION_ITEM_STATE).putExtra(BleService.EXTRA_ITEM_ID, itemId));
     }
 
-    private static void restartBeacon(BaseItem item) {
-        if (item.getStatus() == BaseItem.STATUS_ADVERTISING) {
-            // todo - only do this if frequency / power / payload changed
+    public static void restartBeacon(Beacon item) {
+        if (item.getStatus() == Beacon.STATUS_ADVERTISING) {
             setState(item.getId(), Storage.STATE_ENABLED);
         }
-    }
-
-    private static EddystoneItem storeEddystone(int mode, int txPowerLevel, int flags,
-                                                String name, String payload, String domain) {
-        long itemId = Storage.getInstance().insertEddystoneItem(mode, txPowerLevel, payload, flags,
-                name, domain);
-
-        EddystoneItem item = new EddystoneItem(itemId, flags, payload, domain);
-        item.setAdvertiseMode(mode);
-        item.setTxPowerLevel(txPowerLevel);
-        item.setName(name);
-
-        getInstance().mActiveItems.add(item);
-        setState(item.getId(), Storage.STATE_ENABLED);
-
-        return item;
-    }
-
-    @NonNull
-    private static UriioItem storeUriio(long urlId, String urlToken, String url, byte[] privateKey,
-                                        int mode, int txPowerLevel, int ttl, String name) {
-        // store
-        long itemId = Storage.getInstance().insertUriioItem(urlId, urlToken, url, privateKey,
-                mode, txPowerLevel, ttl, EddystoneBeacon.FLAG_FRAME_URL, name);
-
-        // instantiate item
-        UriioItem item = new UriioItem(itemId, EddystoneBeacon.FLAG_FRAME_URL, urlId, urlToken, ttl,
-                0, null, url, privateKey);
-        item.setAdvertiseMode(mode);
-        item.setTxPowerLevel(txPowerLevel);
-        item.setName(name);
-
-        getInstance().mActiveItems.add(item);
-        setState(item.getId(), Storage.STATE_ENABLED);
-
-        return item;
     }
 }
