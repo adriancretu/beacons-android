@@ -15,7 +15,7 @@ public class Util {
     /**
      * Enables Log debug output. Unfortunately BuildConfig.DEBUG does not work for library projects.
      */
-    private static final boolean VERBOSE = true;
+    private static final boolean VERBOSE = false;
 
     /**
      * Hex characters used for binary to hex conversion
