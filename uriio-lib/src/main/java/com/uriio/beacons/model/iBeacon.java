@@ -20,7 +20,7 @@ public class iBeacon extends Beacon {
                    byte[] uuid, int major, int minor, @AdvertiseMode int advertiseMode,
                    @AdvertiseTxPower int txPowerLevel,
                    int flags, String name) {
-        super(itemId, IBEACON, advertiseMode, txPowerLevel, flags, name);
+        super(itemId, advertiseMode, txPowerLevel, flags, name);
 
         init(uuid, major, minor);
     }
@@ -42,12 +42,17 @@ public class iBeacon extends Beacon {
     }
 
     public iBeacon(byte[] uuid, int major, int minor, String name) {
-        super(IBEACON, iBeaconAdvertiser.FLAG_APPLE, name);
+        super(iBeaconAdvertiser.FLAG_APPLE, name);
         init(uuid, major, minor);
     }
 
     public iBeacon(byte[] uuid, int major, int minor) {
         this(uuid, major, minor, null);
+    }
+
+    @Override
+    public int getType() {
+        return IBEACON;
     }
 
     private void init(byte[] uuid, int major, int minor) {

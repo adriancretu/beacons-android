@@ -183,7 +183,11 @@ public class Storage extends SQLiteOpenHelper {
         }
 
         mInsertUriioItemStmt.bindString(2, item.getUrlToken());
-        mInsertUriioItemStmt.bindString(3, item.getLongUrl());
+
+        String longUrl = item.getLongUrl();
+        if (null == longUrl) mInsertUriioItemStmt.bindNull(3);
+        else mInsertUriioItemStmt.bindString(3, longUrl);
+
         mInsertUriioItemStmt.bindLong(4, item.getUrlId());
         mInsertUriioItemStmt.bindLong(5, item.getTimeToLive());
 
@@ -431,7 +435,11 @@ public class Storage extends SQLiteOpenHelper {
 
         SQLiteStatement stmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET ttl=?, longUrl=? WHERE rowid=?");
         stmt.bindLong(1, item.getTimeToLive());
-        stmt.bindString(2, item.getLongUrl());
+
+        String longUrl = item.getLongUrl();
+        if (null == longUrl) stmt.bindNull(2);
+        else stmt.bindString(2, longUrl);
+
         stmt.bindLong(3, id);
 
         stmt.executeUpdateDelete();

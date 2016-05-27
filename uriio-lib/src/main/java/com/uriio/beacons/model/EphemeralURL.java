@@ -79,6 +79,11 @@ public class EphemeralURL extends EddystoneURL {
         init(urlId, urlToken, ttl, null);
     }
 
+    @Override
+    public int getType() {
+        return EPHEMERAL_URL;
+    }
+
     private void init(long urlId, String urlToken, int ttl, String longUrl) {
         mUrlId = urlId;
         mUrlToken = urlToken;

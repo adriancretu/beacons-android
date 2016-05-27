@@ -14,7 +14,7 @@ public class EddystoneURL extends EddystoneBase {
 
     public EddystoneURL(long id, String url, byte[] lockKey, @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(id, Beacon.EDDYSTONE_URL, lockKey, mode, txPowerLevel, name);
+        super(id, EDDYSTONE_URL, lockKey, mode, txPowerLevel, name);
         mURL = url;
     }
 
@@ -29,12 +29,17 @@ public class EddystoneURL extends EddystoneBase {
     }
 
     public EddystoneURL(String url, byte[] lockKey) {
-        super(Beacon.EDDYSTONE_URL, lockKey);
+        super(EDDYSTONE_URL, lockKey);
         mURL = url;
     }
 
     public EddystoneURL(String url) {
         this(url, null);
+    }
+
+    @Override
+    public int getType() {
+        return EDDYSTONE_URL;
     }
 
     @Override

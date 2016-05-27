@@ -29,7 +29,7 @@ public class EddystoneEID extends EddystoneBase {
                         byte[] lockKey,
                         @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(id, Beacon.EDDYSTONE_EID, lockKey, mode, txPowerLevel, name);
+        super(id, EDDYSTONE_EID, lockKey, mode, txPowerLevel, name);
         init(identityKey, rotationExponent, timeOffset);
     }
 
@@ -58,8 +58,13 @@ public class EddystoneEID extends EddystoneBase {
     }
 
     public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset) {
-        super(Beacon.EDDYSTONE_EID);
+        super(EDDYSTONE_EID);
         init(identityKey, rotationExponent, timeOffset);
+    }
+
+    @Override
+    public int getType() {
+        return EDDYSTONE_EID;
     }
 
     @Override

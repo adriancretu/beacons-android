@@ -11,16 +11,16 @@ import java.security.SecureRandom;
 public abstract class EddystoneBase extends Beacon {
     private byte[] mLockKey;
 
-    public EddystoneBase(long itemId, int type, byte[] lockKey,
+    public EddystoneBase(long itemId, int frameType, byte[] lockKey,
                          @AdvertiseMode int advertiseMode,
                          @AdvertiseTxPower int txPowerLevel,
                          String name) {
-        super(itemId, type, advertiseMode, txPowerLevel, type << 4, name);
+        super(itemId, advertiseMode, txPowerLevel, frameType << 4, name);
         init(lockKey);
     }
 
-    public EddystoneBase(int type, byte[] lockKey) {
-        super(type, type << 4);
+    public EddystoneBase(int frameType, byte[] lockKey) {
+        super(frameType << 4);
         init(lockKey);
     }
 

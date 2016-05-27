@@ -57,44 +57,38 @@ public abstract class Beacon {
 
     private boolean mConnectable = false;
 
-    private final int mType;
-
     /*
     * @param mode                 BLE mode
     * @param txPowerLevel         BLE TX power level
     * @param mName                 Optional mName
     */
-    public Beacon(long itemId, int type,
+    public Beacon(long itemId,
                   @AdvertiseMode int advertiseMode,
                   @AdvertiseTxPower int txPowerLevel, int flags, String name) {
         mId = itemId;
-        mType = type;
         mFlags = flags;
         mAdvertiseMode = advertiseMode;
         mTxPowerLevel = txPowerLevel;
         mName = name;
     }
 
-    public Beacon(int type,
-                  @AdvertiseMode int advertiseMode,
+    public Beacon(@AdvertiseMode int advertiseMode,
                   @AdvertiseTxPower int txPowerLevel, int flags, String name) {
-        this(0, type, advertiseMode, txPowerLevel, flags, name);
+        this(0, advertiseMode, txPowerLevel, flags, name);
     }
 
-    public Beacon(int type,
-                  @AdvertiseMode int advertiseMode,
+    public Beacon(@AdvertiseMode int advertiseMode,
                   @AdvertiseTxPower int txPowerLevel, int flags) {
-        this(0, type, advertiseMode, txPowerLevel, flags, null);
+        this(0, advertiseMode, txPowerLevel, flags, null);
     }
 
-    public Beacon(int type, int flags, String name) {
-        mType = type;
+    public Beacon(int flags, String name) {
         mFlags = flags;
         mName = name;
     }
 
-    public Beacon(int type, int flags) {
-        this(type, flags, null);
+    public Beacon(int flags) {
+        this(flags, null);
     }
 
     public void setStorageState(int state) {
@@ -148,9 +142,7 @@ public abstract class Beacon {
 
     public abstract int getKind();
 
-    public int getType() {
-        return mType;
-    }
+    abstract public int getType();
 
     public String getName() {
         return mName;
