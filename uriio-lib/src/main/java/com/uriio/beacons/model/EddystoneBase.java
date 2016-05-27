@@ -19,9 +19,13 @@ public abstract class EddystoneBase extends Beacon {
         init(lockKey);
     }
 
-    public EddystoneBase(int type) {
+    public EddystoneBase(int type, byte[] lockKey) {
         super(type, type << 4);
-        init(null);
+        init(lockKey);
+    }
+
+    public EddystoneBase(int type) {
+        this(type, null);
     }
 
     private void init(byte[] lockKey) {

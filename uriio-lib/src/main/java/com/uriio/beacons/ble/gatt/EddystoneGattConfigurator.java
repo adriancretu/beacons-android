@@ -12,8 +12,6 @@ import com.uriio.beacons.model.EddystoneEID;
 import com.uriio.beacons.model.EddystoneUID;
 import com.uriio.beacons.model.EddystoneURL;
 
-import org.uribeacon.beacon.UriBeacon;
-
 import java.nio.ByteBuffer;
 
 /**
@@ -57,13 +55,11 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
             return buffer.array();
         }
-        return ((EddystoneAdvertiser) mBeacon.getAdvertiser()).getServiceData();
+        return ((EddystoneAdvertiser) mBeacon.createBeacon(null)).getServiceData();
     }
 
     @Override
-    public void advertiseURL(byte[] advertiseData) {
-        String url = UriBeacon.decodeUri(advertiseData, 0);
-
+    public void advertiseURL(String url) {
         if (mBeacon.getType() != Beacon.EDDYSTONE_URL) {
             mBeacon = new EddystoneURL(0, url, mBeacon.getLockKey(), mBeacon.getAdvertiseMode(),
                     mBeacon.getTxPowerLevel(), mBeacon.getName());
@@ -118,18 +114,18 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     }
 
     @Override
-    public byte[] getSupportedTxPowers() {
-        return AdvertisersManager.getSupportedTxPowers();
+    public byte[] getSupportedRadioTxPowers() {
+        return AdvertisersManager.getSupportedRadioTxPowers();
     }
 
     @Override
     public int getRadioTxPower() {
-        return AdvertisersManager.getSupportedTxPowers()[mBeacon.getTxPowerLevel()];
+        return AdvertisersManager.getSupportedRadioTxPowers()[mBeacon.getTxPowerLevel()];
     }
 
     @Override
     public int getAdvertisedTxPower() {
-        return getRadioTxPower();
+        return AdvertisersManager.getZeroDistanceTxPower(mBeacon.getTxPowerLevel());
     }
 
     @Override
@@ -141,12 +137,12 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     }
 
     @Override
-    public int setAdvertiseTxPower(byte advertisedTxPower) {
-        byte[] txPowers = getSupportedTxPowers();
+    public int setRadioTxPower(byte txPower) {
+        byte[] txPowers = getSupportedRadioTxPowers();
         int txPowerLevel = 0;
 
         for (int i = 0; i < txPowers.length; i++) {
-            if (advertisedTxPower > txPowers[i]) txPowerLevel = i;
+            if (txPower >= txPowers[i]) txPowerLevel = i;
         }
 
         //noinspection WrongConstant
@@ -161,11 +157,14 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
         @Beacon.AdvertiseMode int mode;
 
-        if (advertiseIntervalMs < 500) {
+        if (advertiseIntervalMs <= 100 + (250 - 100) / 2) {
+            // 100 ms
             mode = AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY;
-        } else if (advertiseIntervalMs >= 2000) {
+        } else if (advertiseIntervalMs >= 1000 - (1000 - 250) / 2) {
+            // 1000 ms
             mode = AdvertiseSettings.ADVERTISE_MODE_LOW_POWER;
         } else {
+            // 250 ms actually
             mode = AdvertiseSettings.ADVERTISE_MODE_BALANCED;
         }
 
@@ -178,12 +177,12 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     public int getAdvertiseInterval() {
         switch (mBeacon.getAdvertiseMode()) {
             case AdvertiseSettings.ADVERTISE_MODE_LOW_POWER:
-                default:
-                return 2000;
-            case AdvertiseSettings.ADVERTISE_MODE_BALANCED:
+            default:
                 return 1000;
+            case AdvertiseSettings.ADVERTISE_MODE_BALANCED:
+                return 250;
             case AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY:
-                return 500;
+                return 100;
         }
     }
 

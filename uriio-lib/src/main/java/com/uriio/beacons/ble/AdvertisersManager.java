@@ -31,8 +31,12 @@ public class AdvertisersManager {
     private BLEListener mListener;
 
     /** Received TX power at 0 meters, for each TX power level **/
-    private static final byte[] _txPower = new byte[] {
-        -59, -35, -26, -16
+    private static final byte[] _advertisedTxPowers = new byte[] {
+            -59, -35, -26, -16
+    };
+    private static final byte[] _radioTxPowers = new byte[] {
+            // Nexus 6 / Android 6.0.1 actual TX Power characteristic values
+            -21, -15, -7, 1
     };
 
     public AdvertisersManager(BluetoothManager bluetoothManager, BLEListener listener) {
@@ -132,10 +136,10 @@ public class AdvertisersManager {
      * @return TX power
      */
     public static byte getZeroDistanceTxPower(int powerLevel) {
-        return _txPower[powerLevel];
+        return _advertisedTxPowers[powerLevel];
     }
 
-    public static byte[] getSupportedTxPowers() {
-        return _txPower;
+    public static byte[] getSupportedRadioTxPowers() {
+        return _radioTxPowers;
     }
 }

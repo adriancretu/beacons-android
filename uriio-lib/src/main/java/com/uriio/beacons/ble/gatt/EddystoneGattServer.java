@@ -52,7 +52,7 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
 
         List<BluetoothGattService> gattServices = mGattServer.getServices();
         for (BluetoothGattService service : gattServices) {
-            if (service.getUuid() == EddystoneGattService.UUID_EDDYSTONE_SERVICE) {
+            if (service.getUuid() == EddystoneGattService.UUID_EDDYSTONE_GATT_SERVICE) {
                 log("An Eddystone GATT service is already running on this device");
                 close();
                 return false;
@@ -61,7 +61,7 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
 
         mEddystoneConfigurator = new EddystoneGattConfigurator(currentBeacon);
 
-        mEddystoneGattService = new EddystoneGattService(this, mEddystoneConfigurator, mLogger);
+        mEddystoneGattService = new EddystoneGattService(this, mEddystoneConfigurator);
         if (!mGattServer.addService(mEddystoneGattService.getService())) {
             log("Failed to add Eddystone GATT service");
             close();
@@ -70,7 +70,7 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
 
         if (null != mPivotBeacon) {
             // advertise beacon as connectable
-            log("Making pivot beacon connectable");
+            log("Setting pivot beacon connectable");
             mPivotBeacon.edit().setConnectable(true).apply();
         }
 
@@ -84,9 +84,13 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
         }
 
         if (null != mPivotBeacon) {
+            log("Setting pivot beacon un-connectable");
             mPivotBeacon.edit().setConnectable(false).apply();
             mPivotBeacon = null;
         }
+
+        mListener.onGattFinished(null == mEddystoneConfigurator ? null :
+                mEddystoneConfigurator.getConfiguredBeacon());
     }
 
     @Override
@@ -124,7 +128,6 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
             if (device.equals(mEddystoneGattService.getConnectedOwner())) {
                 log("Owner disconnected, stopping GATT server");
                 mEddystoneGattService.onOwnerDisconnected();
-                mListener.onGattFinished(mEddystoneConfigurator.getConfiguredBeacon());
                 close();
             }
         }

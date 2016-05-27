@@ -72,7 +72,7 @@ Every beacon will store its own Lock Key, allowing re-configuration in future ve
 keep a copy of it too, to allow GATT-based beacon unlocking).
 
 ```
-// create and start a beacon used to advertise conneectable mode
+// create and start a temporary beacon used to advertise conneectable mode
 mPivotBeacon = new EddystoneURL("http://cf.physical-web.org");
 Beacons.add(mPivotBeacon);
 
@@ -82,26 +82,26 @@ mGattServer = new EddystoneGattServer(mPivotBeacon, new EddystoneGattServer.List
         if (null != configuredBeacon) {
             Beacons.add(configuredBeacon);
         }
+		
+		// remove temporary beacon used for GATT connection
+		Beacons.delete(mPivotBeacon.getId());
     }
 }, new Loggable() {
     @Override
     public void log(String tag, final String message) {
-        // log however you need
+        // log however you want (note: not always called from main thread)
     }
 });
 
 // start with an empty UID advertiser with default settings.
 EddystoneUID currentBeacon = new EddystoneUID(new byte[16]);
 
-userFriendlyUnlockKey = Util.binToHex(currentBeacon.getLockKey(), 0, 16, ' ');
+hexUnlockKey = Util.binToHex(currentBeacon.getLockKey(), 0, 16, ' ');
 
 mGattServer.start(mConfigActivity, currentBeacon);
 
 // ... when you are done
 mGattServer.close();
-
-// this must be done last
-Beacons.delete(mPivotBeacon.getId());
 ```
 
 ### Ephemeral URL
@@ -152,6 +152,9 @@ Beacons.uriio().updateUrl(item.getUrlId(), item.getUrlToken(), url, new Beacons.
 General pattern to update one or more properties:
 
 ```
+// note: the chained calls return an Editor, which is not always the actual subclass type.
+// to fix this, either use a local variable for edit() return type, or call first the set
+// methods defined by highest subclass, and then from super classes.
 beacon.edit()
     .set*(value)
     .set*(value)

@@ -1,4 +1,4 @@
-### 1.3.0 (May 27, 2016)
+### 1.3.1 (May 27, 2016)
 * Added Eddystone GATT configuration service, with Locking support and single-client mode.
 * Smart property-based beacon editing with self-restart and saving when needed
 * Merged beacon models from previous API into single beacon types.

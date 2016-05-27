@@ -5,6 +5,7 @@ import android.bluetooth.le.AdvertiseData;
 import android.os.Build;
 import android.os.ParcelUuid;
 
+import com.uriio.beacons.ble.gatt.EddystoneGattService;
 import com.uriio.beacons.model.Beacon;
 
 /**
@@ -25,6 +26,7 @@ public class EddystoneAdvertiser extends Advertiser {
     public static final byte FRAME_EID = 0x30;
 
     private final AdvertiseData mAdvertiseData;
+    private AdvertiseData mAdvertiseScanResponse = null;
     private final byte[] mServiceData;
 
     /**
@@ -71,11 +73,24 @@ public class EddystoneAdvertiser extends Advertiser {
                 .addServiceData(EDDYSTONE_SERVICE_UUID, mServiceData)
                 .addServiceUuid(EDDYSTONE_SERVICE_UUID)
                 .build();
+
+        if (connectable) {
+            mAdvertiseScanResponse = new AdvertiseData.Builder()
+                    .setIncludeDeviceName(true)
+                    .setIncludeTxPowerLevel(true)
+                    .addServiceUuid(new ParcelUuid(EddystoneGattService.UUID_EDDYSTONE_GATT_SERVICE))
+                    .build();
+        }
     }
 
     @Override
     public AdvertiseData getAdvertiseData() {
         return mAdvertiseData;
+    }
+
+    @Override
+    public AdvertiseData getAdvertiseScanResponse() {
+        return mAdvertiseScanResponse;
     }
 
     public byte[] getServiceData() {

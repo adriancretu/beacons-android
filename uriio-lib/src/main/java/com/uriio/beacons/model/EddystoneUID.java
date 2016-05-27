@@ -45,14 +45,18 @@ public class EddystoneUID extends EddystoneBase {
         this(0, namespaceInstance, null, null, mode, txPowerLevel, null);
     }
 
-    public EddystoneUID(byte[] namespaceInstance, String domainHint) {
-        super(Beacon.EDDYSTONE_UID);
+    public EddystoneUID(byte[] namespaceInstance, String domainHint, byte[] lockKey) {
+        super(Beacon.EDDYSTONE_UID, lockKey);
         mNamespaceInstance = namespaceInstance;
         mDomainHint = domainHint;
     }
 
+    public EddystoneUID(byte[] namespaceInstance, byte[] lockKey) {
+        this(namespaceInstance, null, lockKey);
+    }
+
     public EddystoneUID(byte[] namespaceInstance) {
-        this(namespaceInstance, null);
+        this(namespaceInstance, null, null);
     }
 
     @Override

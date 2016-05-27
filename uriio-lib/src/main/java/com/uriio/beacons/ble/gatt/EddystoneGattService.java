@@ -6,10 +6,10 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattServer;
 import android.bluetooth.BluetoothGattService;
 
-import com.uriio.beacons.Loggable;
 import com.uriio.beacons.Util;
 import com.uriio.beacons.eid.EIDUtils;
 
+import org.uribeacon.beacon.UriBeacon;
 import org.whispersystems.curve25519.Curve25519;
 import org.whispersystems.curve25519.Curve25519KeyPair;
 
@@ -28,7 +28,7 @@ import javax.crypto.spec.SecretKeySpec;
  * Eddystone GATT Service
  */
 public class EddystoneGattService {
-    public static final UUID UUID_EDDYSTONE_SERVICE = UUID.fromString("a3c87500-8ed3-4bdf-8a39-a01bebede295");
+    public static final UUID UUID_EDDYSTONE_GATT_SERVICE = UUID.fromString("a3c87500-8ed3-4bdf-8a39-a01bebede295");
 
     private static final UUID UUID_CAPABILITIES_CHARACTERISTIC = UUID.fromString("a3c87501-8ed3-4bdf-8a39-a01bebede295");
     private static final UUID UUID_ACTIVE_SLOT_CHARACTERISTIC = UUID.fromString("a3c87502-8ed3-4bdf-8a39-a01bebede295");
@@ -67,17 +67,15 @@ public class EddystoneGattService {
     private byte[] mLockKey;
     private EddystoneGattServer mGattServer;
     private EddystoneGattConfigCallback mConfigCallback;
-    private Loggable mLogger;
     private Curve25519KeyPair mEidKeyPair;
     private BluetoothDevice mOwnerDevice = null;
 
     public EddystoneGattService(EddystoneGattServer eddystoneGattServer,
-                                EddystoneGattConfigCallback configCallback, Loggable loggable) {
+                                EddystoneGattConfigCallback configCallback) {
         mGattServer = eddystoneGattServer;
         mConfigCallback = configCallback;
-        mLogger = loggable;
 
-        mService = new BluetoothGattService(UUID_EDDYSTONE_SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+        mService = new BluetoothGattService(UUID_EDDYSTONE_GATT_SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY);
 
         mLockKey = mConfigCallback.getLockKey();
 
@@ -99,7 +97,7 @@ public class EddystoneGattService {
         byte maxSupportedEidSlots = 1;
         byte capabilities = VARIABLE_ADV_SUPPORTED | VARIABLE_TX_POWER_SUPPORTED;
         short supportedFrameTypes = 0x01 | 0x02 | 0x08;
-        byte[] supportedTxPowerLevels = mConfigCallback.getSupportedTxPowers();
+        byte[] supportedTxPowerLevels = mConfigCallback.getSupportedRadioTxPowers();
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(6 + supportedTxPowerLevels.length);
         byteBuffer.put(new byte[]{
@@ -182,8 +180,9 @@ public class EddystoneGattService {
         return val >>> 8 | (val & 0xff) << 8;
     }
 
-    private int fromBigEndian(byte[] val) {
-        return val[0] | val[1] << 8;
+    private int unpackShort(byte[] val) {
+        // prevent automatic byte to int expansion, for LSB (messes up the sign bit)
+        return val[1] & 0xff | val[0] << 8;
     }
 
     public BluetoothGattService getService() {
@@ -197,27 +196,27 @@ public class EddystoneGattService {
         int status =  BluetoothGatt.GATT_SUCCESS;
 
         if (isLocked()) {
-            if (uuid.equals(UUID_UNLOCK_CHARACTERISTIC)) {
+            if (characteristic == mUnlockCharacteristic) {
                 log("Generating new SecureRandom unlock challenge");
                 characteristic.setValue(new byte[16]);
                 new SecureRandom().nextBytes(characteristic.getValue());
             } else {
-                if (!uuid.equals(UUID_LOCK_STATE_CHARACTERISTIC)) {
+                if (characteristic != mLockStateCharacteristic) {
                     status = BluetoothGatt.GATT_READ_NOT_PERMITTED;
                 }
             }
         }
-        else if (uuid.equals(UUID_UNLOCK_CHARACTERISTIC)) {
+        else if (characteristic == mUnlockCharacteristic) {
             status = BluetoothGatt.GATT_READ_NOT_PERMITTED;
-        } else if (uuid.equals(UUID_PUBLIC_ECDH_KEY_CHARACTERISTIC)) {
+        } else if (characteristic == mPublicEcdhKeyCharacteristic) {
             log("ECDH Public Key was requested");
             if (0 == offset) {
                 characteristic.setValue(null == mEidKeyPair ? new byte[0] : mEidKeyPair.getPublicKey());
             }
-        } else if (uuid.equals(UUID_ADV_SLOT_DATA_CHARACTERISTIC)) {
+        } else if (characteristic == mAdvSlotDataCharacteristic) {
             log("Advertisement slot data requested");
             characteristic.setValue(mConfigCallback.getAdvertisedData());
-        } else if (uuid.equals(UUID_EID_IDENTITY_KEY_CHARACTERISTIC)) {
+        } else if (characteristic  == mEidIdentityKeyCharacteristic) {
             log("Identity Key was requested");
             byte[] identityKey = mConfigCallback.getEidIdentityKey();
             if (null == identityKey) {
@@ -243,52 +242,57 @@ public class EddystoneGattService {
     public int writeCharacteristic(BluetoothDevice device, BluetoothGattCharacteristic characteristic, byte[] value) {
         UUID uuid = characteristic.getUuid();
         if (isLocked()) {
-            if (uuid.equals(UUID_UNLOCK_CHARACTERISTIC) && value.length == 16) {
-                byte[] token = aes_transform(true, characteristic.getValue(), 0, 16);
-                if (Arrays.equals(token, value)) {
-                    log(String.format("%s Unlock success", device));
+            if (characteristic == mUnlockCharacteristic) {
+                if (value.length == 16) {
+                    byte[] token = aes_transform(true, characteristic.getValue(), 0, 16);
+                    if (Arrays.equals(token, value)) {
+                        log(String.format("%s Unlock success", device));
 
-                    mOwnerDevice = device;
-                    mGattServer.keepSingleConnected(device);
-                    characteristic.setValue((byte[]) null);
-                    mLockStateCharacteristic.setValue(new byte[] { LOCK_STATE_UNLOCKED});
+                        mOwnerDevice = device;
+                        mGattServer.keepSingleConnected(device);
+                        characteristic.setValue((byte[]) null);
+                        mLockStateCharacteristic.setValue(new byte[] { LOCK_STATE_UNLOCKED});
 
-                    return BluetoothGatt.GATT_SUCCESS;
+                        return BluetoothGatt.GATT_SUCCESS;
+                    }
+                    else log("Unlock failed!");
                 }
-                else log("Unlock failed!");
+                else log(String.format("Invalid unlock length: %d", value.length));
             }
 
             log("Beacon locked - write request denied");
             return BluetoothGatt.GATT_WRITE_NOT_PERMITTED;
         }
 
-        if (uuid.equals(UUID_LOCK_STATE_CHARACTERISTIC)) {
+        if (characteristic == mLockStateCharacteristic) {
             if (value[0] == LOCK_STATE_LOCKED && value.length == 17) {
                 mLockKey = aes_transform(false, value, 1, 16);
                 mConfigCallback.setLockKey(mLockKey);
                 log("Lock key changed");
             }
             characteristic.setValue(new byte[]{value[0]});
-        } else if (uuid.equals(UUID_ACTIVE_SLOT_CHARACTERISTIC)) {
+        } else if (characteristic == mActiveSlotCharacteristic) {
             log("Request to change active slot to " + value[0]);
             if (value[0] != 1) {
                 // Beacon Tools tries to change the active slot to 1
                 return BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH;
             }
-        } else if (uuid.equals(UUID_RADIO_TX_POWER_CHARACTERISTIC)) {
+        } else if (characteristic == mRadioTxPowerCharacteristic) {
             if (value.length == 1) {
-                int txPower = mConfigCallback.setAdvertiseTxPower(value[0]);
+                int txPower = mConfigCallback.setRadioTxPower(value[0]);
                 characteristic.setValue(txPower, BluetoothGattCharacteristic.FORMAT_SINT8, 0);
-                mAdvertisedTxPowerCharacteristic.setValue(characteristic.getValue());
+
+                // if Radio TX has changed, then Advertised TX has also changed
+                mAdvertisedTxPowerCharacteristic.setValue(mConfigCallback.getAdvertisedTxPower(), BluetoothGattCharacteristic.FORMAT_SINT8, 0);
                 log(String.format("Radio TX Power %d was requested. Actual value is now %d",
                         value[0], txPower));
             }
             else {
                 log("Invalid Radio TX power value size: " + value.length);
             }
-        } else if (uuid.equals(UUID_ADVERTISE_INTERVAL_CHARACTERISTIC)) {
+        } else if (characteristic == mAdvertiseIntervalCharacteristic) {
             if (value.length == 2) {
-                int wantedAdvertiseInterval = fromBigEndian(value);
+                int wantedAdvertiseInterval = unpackShort(value);
                 int actualAdvertiseInterval = mConfigCallback.setAdvertiseInterval(wantedAdvertiseInterval);
                 characteristic.setValue(toBigEndian(actualAdvertiseInterval), BluetoothGattCharacteristic.FORMAT_UINT16, 0);
                 log(String.format("Advertise Interval %d was requested. Actual value is now %d",
@@ -297,21 +301,26 @@ public class EddystoneGattService {
             else {
                 log("Invalid Advertise Interval value size: " + value.length);
             }
-        } else if (uuid.equals(UUID_ADV_SLOT_DATA_CHARACTERISTIC)) {
+        } else if (characteristic == mAdvSlotDataCharacteristic) {
             switch (value[0]) {
                 case 0x00: // UID
                     if (value.length == 1) {
                         // TODO: 5/25/2016 - check if array is empty, according to spec
+                        log("Clearing beacon advertisement format");
                         mConfigCallback.stopAdvertise();
                     }
                     else {
+                        log("Setting UID frame " + Util.binToHex(value, 1, 16, ' '));
                         mConfigCallback.advertiseUID(Arrays.copyOfRange(value, 1, 17));
                     }
                     break;
                 case 0x10: // URL
-                    mConfigCallback.advertiseURL(Arrays.copyOfRange(value, 1, value.length));
+                    String url = UriBeacon.decodeUri(Arrays.copyOfRange(value, 1, value.length), 0);
+                    log("Setting URL frame: " + url);
+                    mConfigCallback.advertiseURL(url);
                     break;
                 case 0x20: // TLM
+                    log("TLM format is not supported");
                     break;
                 case 0x30: // EID
                     if (value.length == 34) {
@@ -344,7 +353,7 @@ public class EddystoneGattService {
                     }
                     break;
             }
-        } else if (uuid.equals(UUID_FACTORY_RESET_CHARACTERISTIC)) {
+        } else if (characteristic == mFactoryResetCharacteristic) {
             if (0x0B == value[0]) {
                 factoryReset();
             }

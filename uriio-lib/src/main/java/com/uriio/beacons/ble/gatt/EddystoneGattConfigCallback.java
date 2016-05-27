@@ -11,14 +11,14 @@ public interface EddystoneGattConfigCallback {
      */
     byte[] getAdvertisedData();
 
-    byte[] getSupportedTxPowers();
+    byte[] getSupportedRadioTxPowers();
 
     /**
      * Change Advertise TX power
      * @param advertisedTxPower    Requested TX power (may not be one in the supoorted list)
      * @return Final resolved TX power
      */
-    int setAdvertiseTxPower(byte advertisedTxPower);
+    int setRadioTxPower(byte advertisedTxPower);
 
 
     /**
@@ -32,7 +32,7 @@ public interface EddystoneGattConfigCallback {
      * Requests advertising an URL, in an already encoded form.
      * @param advertiseData
      */
-    void advertiseURL(byte[] advertiseData);
+    void advertiseURL(String advertiseData);
 
     /**
      * @param namespaceInstance    16-bytes namespace + instance raw data.
