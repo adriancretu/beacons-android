@@ -57,9 +57,21 @@ public class EddystoneEID extends EddystoneBase {
         this(0, identityKey, rotationExponent, timeOffset, null, mode, txPowerLevel, null);
     }
 
-    public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset) {
-        super(EDDYSTONE_EID);
+    public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, byte[] lockKey, String name) {
+        super(EDDYSTONE_EID, lockKey, name);
         init(identityKey, rotationExponent, timeOffset);
+    }
+
+    public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, byte[] lockKey) {
+        this(identityKey, rotationExponent, timeOffset, lockKey, null);
+    }
+
+    public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, String name) {
+        this(identityKey, rotationExponent, timeOffset, null, name);
+    }
+
+    public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset) {
+        this(identityKey, rotationExponent, timeOffset, null, null);
     }
 
     @Override

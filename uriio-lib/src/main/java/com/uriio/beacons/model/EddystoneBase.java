@@ -5,7 +5,7 @@ import com.uriio.beacons.Storage;
 import java.security.SecureRandom;
 
 /**
- * Eddystone Advertiser model.
+ * Eddystone beacons common model.
  * Created on 7/21/2015.
  */
 public abstract class EddystoneBase extends Beacon {
@@ -19,13 +19,9 @@ public abstract class EddystoneBase extends Beacon {
         init(lockKey);
     }
 
-    public EddystoneBase(int frameType, byte[] lockKey) {
-        super(frameType << 4);
+    public EddystoneBase(int frameType, byte[] lockKey, String name) {
+        super(frameType << 4, name);
         init(lockKey);
-    }
-
-    public EddystoneBase(int type) {
-        this(type, null);
     }
 
     private void init(byte[] lockKey) {
@@ -55,8 +51,13 @@ public abstract class EddystoneBase extends Beacon {
     }
 
     public class EddystoneEditor extends Editor {
-        public EddystoneEditor setLockKey(byte[] key) {
-            mLockKey = key;
+        /**
+         * Changes the Beacon Lock Key, to be used when configuring the beacon via GATT.
+         * @param lockKey    The new Lock Key, as a 16-byte array
+         * @return The Editor instance, for call chaining.
+         */
+        public EddystoneEditor setLockKey(byte[] lockKey) {
+            mLockKey = lockKey;
             return this;
         }
     }

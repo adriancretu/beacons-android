@@ -28,13 +28,13 @@ public class EddystoneURL extends EddystoneBase {
         this(0, url, null, mode, txPowerLevel, null);
     }
 
-    public EddystoneURL(String url, byte[] lockKey) {
-        super(EDDYSTONE_URL, lockKey);
+    public EddystoneURL(String url, byte[] lockKey, String name) {
+        super(EDDYSTONE_URL, lockKey, name);
         mURL = url;
     }
 
     public EddystoneURL(String url) {
-        this(url, null);
+        this(url, null, null);
     }
 
     @Override

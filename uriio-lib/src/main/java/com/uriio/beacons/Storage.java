@@ -508,6 +508,8 @@ public class Storage extends SQLiteOpenHelper {
                 EddystoneEID eddystoneEID = (EddystoneEID) beacon;
                 // serialize beacon into storage blob
                 byte[] data = new byte[21];
+
+                // only copy the first 16 bytes (the source array might be bigger than 16)
                 System.arraycopy(eddystoneEID.getIdentityKey(), 0, data, 0, 16);
                 ByteBuffer.wrap(data, 16, 4).putInt(eddystoneEID.getEidTimeOffset());
                 data[20] = eddystoneEID.getRotationExponent();
