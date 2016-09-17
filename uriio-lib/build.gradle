@@ -34,41 +34,39 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
 
-    compile 'com.android.support:appcompat-v7:24.2.0'
-    compile 'org.whispersystems:curve25519-android:0.2.4'
-    compile 'com.squareup.retrofit2:retrofit:2.0.2'
-    compile 'com.squareup.retrofit2:converter-gson:2.0.2'
+    compile 'com.android.support:appcompat-v7:24.2.1'
+    compile 'org.whispersystems:curve25519-android:0.2.5'
+    compile 'com.squareup.retrofit2:retrofit:2.1.0'
+    compile 'com.squareup.retrofit2:converter-gson:2.1.0'
 
     testCompile 'junit:junit:4.12'
 }
 
-apply plugin: 'maven'
+apply plugin: 'com.github.dcendents.android-maven'
 
-def localReleaseDest = "${projectDir}/../../maven"
-
-task androidJavadocsJar(type: Jar, dependsOn: generateReleaseJavadoc) {
+task javadocsJar(type: Jar, dependsOn: generateReleaseJavadoc) {
     classifier = 'javadoc'
     from generateReleaseJavadoc.destinationDir
+    // options.encoding = 'UTF-8'
 }
 
-task androidSourcesJar(type: Jar) {
+task sourcesJar(type: Jar) {
     classifier = 'sources'
     from android.sourceSets.main.java.srcDirs
 }
 
-uploadArchives {
-    repositories.mavenDeployer {
-        repository(url: "file://${localReleaseDest}")
-
-        pom {
-            groupId = 'com.uriio'
-            artifactId = 'beacons-android'
-            version = PUBLISH_VERSION
+install {
+    repositories.mavenInstaller {
+        pom.project {
+            name 'UriIO Android BLE beacons advertising library'
+            groupId 'com.uriio'
+            artifactId 'beacons-android'
+            version PUBLISH_VERSION
         }
     }
 }
 
 artifacts {
-    archives androidSourcesJar
-    archives androidJavadocsJar
+    archives sourcesJar
+    archives javadocsJar
 }
