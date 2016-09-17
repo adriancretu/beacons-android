@@ -57,6 +57,7 @@ Examples of supported devices:
 
 ### Setup
 1. Clone the repo and install the library:
+
     ```
     > git clone https://github.com/uriio/beacons-android
     > cd beacons-android
@@ -68,7 +69,10 @@ For a painless process, make sure your Android SDK and environment are correctly
 2. Add this to your app module's **build.gradle**:
 
     ```
-    compile 'com.uriio:beacons-android:1.3.3'
+    dependencies {
+    	...
+    	compile 'com.uriio:beacons-android:1.3.3'
+    }
     ```
 
 3. Initialize the library in the `onCreate()` of your Application, or Activity, or Service:
@@ -239,11 +243,13 @@ Beacons.delete(id)
 ```
 
 ### Changing a beacon's state
-A beacon can be in one of three states: Active, Paused, or Stopped. Use ```Beacons.setState``` to change a beacon's state.
+A beacon can be in one of three states: Active, Paused, or Stopped. Use ```Beacons.setState()``` to change a beacon's state.
 
 ## Listing the beacons
 All added beacons are saved in a SQLite database local to your app's storage.
 
-Retrieve the list of active and paused beacons by calling `Beacons.getActive`
+Retrieve the list of active and paused beacons by calling `Beacons.getActive()`
+
 Stopped beacons are saved to storage. To iterate over them, use `Beacons.getStopped()` to get a `Cursor`.
+
 While iterating over the cursor you can call `Storage.itemFromCursor()` to get actual items. 
