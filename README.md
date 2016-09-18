@@ -61,7 +61,7 @@ Examples of supported devices:
 ### Setup
 1. Add the library to your app module's **build.gradle**:
 
-   ```
+   ```groovy
    dependencies {
       ...
       compile 'com.uriio:beacons-android:1.3.4'
@@ -70,7 +70,7 @@ Examples of supported devices:
 
 2. Initialize the library in the `onCreate()` of your Application, or Activity, or Service:
 
-   ```
+   ```java
    Beacons.initialize(this);  // if you don't need Ephemeral URL support
    
    // OR...
@@ -84,7 +84,7 @@ Examples of supported devices:
 
 You can create, start, and even modify new beacons with one-liners:
 
-```
+```java
 // saves a new  Eddystone-URL beacon and starts it ASAP!
 Beacons.add("https://github.com");
 
@@ -103,7 +103,7 @@ Because starting up a beacon is an Android async operation, if there's an error,
 
 All beacon constructors support extra arguments, to set their initial properties like Advertise mode, TX power, lock key, or name.
 
-```
+```java
 Beacon myUrlBeacon = new EddystoneURL(url, ...);
 Beacon myUidBeacon = new EddystoneUID(namespaceInstance), ...;
 Beacon myiBeacon = new iBeacon(uuid, major, minor, ...);
@@ -118,7 +118,7 @@ An EID beacon first needs to be registered. For testing only, you can fake a reg
 Much better, just use the built-in Eddystone-GATT service (see below) and use an external tool (like Beacon Tools) to register a
 new EID beacon. That will take care of all the ugly details.
 
-```
+```java
 fakeRegistration = EIDUtils.register(new LocalEIDResolver(), mTemporaryKeyPair.getPublicKey(),
       mTemporaryKeyPair.getPrivateKey(), rotationExponent);
 
@@ -135,7 +135,7 @@ The final configured beacon's type may be different than the one provided to GAT
 
 You receive the configured beacon in a callback after the owner disconnects. The beacon will already be saved and running.
 
-```
+```java
 mGattServer = new EddystoneGattServer(new EddystoneGattServer.Listener() {
    @Override
    public void onGattFinished(EddystoneBase configuredBeacon) {
@@ -151,7 +151,7 @@ You can then start the GATT service, passing in an optional beacon as the config
 
 The beacon will become connectable while being configured, so most probably it will no longer advertise during this time.
 
-```
+```java
 // use a new, blank, default Eddystone-UID beacon as the configured beacon
 boolean success = mGattServer.start(context)
 
@@ -165,7 +165,7 @@ boolean success = mGattServer.start(context, myExistingBeacon)
 
 Every Eddystone beacon has its own Lock Key. To allow future re-configuration, and since the Proximity API also has a field for an Unlock Key, we can't just create a new Unlock Key each time a beacon is configured via GATT.
 
-```
+```java
 if (success) {
    // you should present the Unlock Key somehow to the user, since it's needed to connect to the beacon
    String hexUnlockKey = Util.binToHex(mGattServer.getBeacon().getLockKey(), ' ');
@@ -174,13 +174,13 @@ if (success) {
 
 Don't forget to close the GATT service when it's no longer needed ("Cancel" button, activity/fragment closes, etc.)
 
-```
+```java
 mGattServer.close();  // ends GATT as if the owner finished config
 ```
 
 You can attach a simple logging callback to the GATT instance, to display relevant events:
 
-```
+```java
 // call this before start() to log start-up errors
 mGattServer.setLogger(new Loggable() {
    @Override
@@ -199,7 +199,7 @@ For all beacons, you can update a beacon's TX power, broadcast frequency, name.
 Some beacons properties are immutable (example: EID identity key or clock offset).
 The general pattern to update one or more properties:
 
-```
+```java
 // note: the chained calls return an Editor, which doesn't always auto-cast to the actual subclass.
 // to fix this, either use a local variable for edit() return type, or call first the set
 // methods defined by the child subclass, and then from its parents.
@@ -213,7 +213,7 @@ Only if needed (e.g. new TX or frequency), the beacon will restart. Saving is do
 
 ### Deleting a beacon
 
-```
+```java
 Beacons.delete(myBeacon);  // also accepts an ID of a persisted beacon
 ```
 
@@ -241,7 +241,7 @@ This feature requires that you initialized the library with an API key, which yo
 
 This snippet registers a new "long" URL destination and creates an Ephemeral URL beacon for it:
 
-```
+```java
 // the raw key to use for crypto key-exchange; null = use a default strong java crypto RNG
 byte[] temporaryPublicKey = null; // lets the library create a new secure key-pair
 
@@ -273,7 +273,7 @@ The library will call the specific APIs for issuing periodically new short URLs,
 
 To update the target URL (with or without the need to change other beacon properties), use:
 
-```
+```java
 // item is an existing EphemeralURL
 Beacons.uriio().updateUrl(item.getUrlId(), item.getUrlToken(), url, new Beacons.OnResultListener<Url>() {
    @Override
@@ -294,7 +294,7 @@ Beacons.uriio().updateUrl(item.getUrlId(), item.getUrlToken(), url, new Beacons.
 
 Clone the repo and build the library:
 
-```
+```bash
 > git clone https://github.com/uriio/beacons-android
 > cd beacons-android
 > gradlew build
