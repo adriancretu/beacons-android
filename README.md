@@ -93,7 +93,7 @@ Beacons.add(new iBeacon(uuid, major, minor));
 Beacons.add(new EddystoneUID(myUID, AdvertiseSettings.ADVERTISE_MODE_BALANCED, AdvertiseSettings.ADVERTISE_TX_POWER_LOW));
 
 // add a beacon and change its name
-Beacons.add("https://github.com").edit().setName("an awesome beacon");
+Beacons.add("https://github.com").edit().setName("an awesome beacon").apply();
 ```
 
 After adding a beacon, it will begin to advertise immediately if Bluetooth is on (or when it gets enabled).
