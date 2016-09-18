@@ -23,8 +23,9 @@ public class EddystoneUID extends EddystoneBase {
                         @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
         super(id, Beacon.EDDYSTONE_UID, lockKey, mode, txPowerLevel, name);
-        this.mNamespaceInstance = namespaceInstance;
-        this.mDomainHint = domainHint;
+
+        mNamespaceInstance = null != namespaceInstance ? namespaceInstance : new byte[16];
+        mDomainHint = domainHint;
     }
 
     public EddystoneUID(byte[] namespaceInstance, String domainHint,
@@ -47,7 +48,8 @@ public class EddystoneUID extends EddystoneBase {
 
     public EddystoneUID(byte[] namespaceInstance, String domainHint, byte[] lockKey, String name) {
         super(EDDYSTONE_UID, lockKey, name);
-        mNamespaceInstance = namespaceInstance;
+
+        mNamespaceInstance = null != namespaceInstance ? namespaceInstance : new byte[16];
         mDomainHint = domainHint;
     }
 
@@ -57,6 +59,19 @@ public class EddystoneUID extends EddystoneBase {
 
     public EddystoneUID(byte[] namespaceInstance) {
         this(namespaceInstance, null, null, null);
+    }
+
+    /**
+     * Creates a new blank Eddystone-UID beacon (namespace and instance zero-ed out)
+     */
+    public EddystoneUID() {
+        this(null);
+    }
+
+    @Override
+    public EddystoneBase cloneBeacon() {
+        return new EddystoneUID(0, getNamespaceInstance(), getDomainHint(), getLockKey(),
+                getAdvertiseMode(), getTxPowerLevel(), getName());
     }
 
     @Override

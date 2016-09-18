@@ -1,3 +1,11 @@
+### 1.3.4
+* Simplified Eddystone-GATT significantly:
+    - a single, optional beacon can be initially provided to be used as both connectable and as configuration target
+    - automatically save the (new) configured beacon after configuration ends
+
+### 1.3.3 (September 17, 2016)
+* Updated dependencies, no code changes
+
 ### 1.3.2 (May 28, 2016)
 * Fix some persistence bugs.
 

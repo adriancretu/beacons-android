@@ -4,7 +4,7 @@
 - [Features](#features)
 - [Setup](#setup)
 - [Creating beacons](#creating-beacons)
-    * Eddystone-URL / Eddystone-UID / iBeacon
+    * [Eddystone-URL / Eddystone-UID / iBeacon](#eddystone-url-eddystone-uid-ibeacon)
     * [Eddystone-EID](#eddystone-eid)
     * [Eddystone-GATT service](#eddystone-gatt)
 - [Ephemeral URLs](#ephemeral-urls)
@@ -15,9 +15,10 @@
     * [Deleting a beacon](#deleting-a-beacon)
     * [Listing the beacons](#listing-the-beacons)
     
-#### What this library does:
-Allows your app to broadcast as a Bluetooth beacon, as explained below.
-#### What this library **doesn't** do:
+#### What this library is:
+A way for your app to broadcast as a Bluetooth beacon, as explained on this page.
+
+#### What this library **isn't**:
 This is not a *beacon scanning* library. Please use either the Nearby API, or (for advanced use-cases) [OneBeacon](https://github.com/Codefy/onebeacon-android) for that.
 
 ### Description
@@ -56,26 +57,16 @@ Examples of supported devices:
 *CAREFUL* - the service will restore active beacons when it (re)starts, so be sure that you either stop or delete a beacon after you no longer need it, If your app crashes, the service may restart and bring the beacon back, so make sure you check what beacons are enabled and stop the ones that you no longer need. Besides freeing resources, every device has a maximum number of concurrent BLE broadcasters (around 4, more or less?), which means when that number is reached, new beacons will fail to start.
 
 ### Setup
-1. Clone the repo and install the library:
-
-    ```
-    > git clone https://github.com/uriio/beacons-android
-    > cd beacons-android
-    > gradlew install
-    ```
-
-For a painless process, make sure your Android SDK and environment are correctly set-up.
-
-2. Add this to your app module's **build.gradle**:
+1. Add the library to your app module's **build.gradle**:
 
     ```
     dependencies {
-    	...
-    	compile 'com.uriio:beacons-android:1.3.3'
+        ...
+        compile 'com.uriio:beacons-android:1.3.4'
     }
     ```
 
-3. Initialize the library in the `onCreate()` of your Application, or Activity, or Service:
+2. Initialize the library in the `onCreate()` of your Application, or Activity, or Service:
 
     ```
     Beacons.initialize(this);  // if you don't need Ephemeral URL support
@@ -88,25 +79,44 @@ For a painless process, make sure your Android SDK and environment are correctly
 ## Creating beacons
 
 ### Eddystone-URL, Eddystone-UID, iBeacon
-All constructors support extra arguments, to set their initial Advertise mode, TX power, and name.
-Different beacon types will have extra optional arguments.
+
+You can create, start, and even modify new beacons with one-liners:
 
 ```
-Beacon myUrlBeacon = new EddystoneURL(url);
-Beacon myUidBeacon = new EddystoneUID(namespaceInstance);
-Beacon myiBeacon = new iBeacon(uuid, major, minor);
+// saves a new  Eddystone-URL beacon and starts it ASAP!
+Beacons.add("https://github.com");
 
-Beacons.add(myUrlBeacon);  // saves the beacon and starts it ASAP!
+// pass in a custom Beacon
+Beacons.add(new iBeacon(uuid, major, minor));
+
+// provide a more sophisticated beacon
+Beacons.add(new EddystoneUID(myUID, AdvertiseSettings.ADVERTISE_MODE_BALANCED, AdvertiseSettings.ADVERTISE_TX_POWER_LOW));
+
+// add a beacon and change its name
+Beacons.add("https://github.com").edit().setName("an awesome beacon");
 ```
 
 After adding a beacon, it will begin to advertise immediately if Bluetooth is on (or when it gets enabled).
 Because starting up a beacon is an Android async operation, if there's an error, a broadcast is sent by the service. See the `BleService` class to see the action names of the Intent that you would need to register a receiver for.
 
+All beacon constructors support extra arguments, to set their initial properties like Advertise mode, TX power, lock key, or name.
+
+```
+Beacon myUrlBeacon = new EddystoneURL(url, ...);
+Beacon myUidBeacon = new EddystoneUID(namespaceInstance), ...;
+Beacon myiBeacon = new iBeacon(uuid, major, minor, ...);
+```
+
+
 ### Eddystone EID
 
-An EID beacon first needs to be registered. You can fake a registration and use that to provision an EID beacon.
-Realistically, you'll use the built-in Eddystone-GATT feature (see below) and use an external tool (like Beacon Tools) that will register a
-new EID beacon with all the ugly details.
+The library supports full production-ready EID beacons. The beacon's advertised EID will automatically update
+when needed, using scheduled Android system Alarms, so with zero battery impact.
+
+An EID beacon first needs to be registered. For testing only, you can fake a registration and use that to provision an EID beacon.
+Much better, just use the built-in Eddystone-GATT service (see below) and use an external tool (like Beacon Tools) to register a
+new EID beacon. That will take care of all the ugly details.
+
 ```
 fakeRegistration = EIDUtils.register(new LocalEIDResolver(), mTemporaryKeyPair.getPublicKey(),
         mTemporaryKeyPair.getPrivateKey(), rotationExponent);
@@ -118,42 +128,64 @@ Beacons.add(new EddystoneEID(registrationResult.getIdentityKey(), rotationExpone
 
 ### Eddystone-GATT
 
-Eddystone-GATT will run a GATT server and can configure a Eddystone URL/UID/EID beacon.
-You receive the final configured beacon in a callback after the owner disconnects.
-Every beacon will store its own Lock Key, allowing re-configuration in future versions (since e.g. the Proximity API also keeps the Unlock Key, we must
-keep a copy of it too, to allow GATT-based beacon unlocking).
+An actual Eddystone-GATT configuration service can run on the local device, allowing a remote user to configure a new or existing Eddystone URL/UID/EID beacon.
+
+The final configured beacon's type may be different than the one provided to GATT, because its type may change (e.g. it was an Eddystone-URL and it ends up an Eddystone-UID, etc.)
+
+You receive the configured in a callback after the owner disconnects. The beacon will be already saved.
+
+Every beacon will store its own Lock Key, allowing future re-configuration (since e.g. the Proximity API also keeps the Unlock Key, we must keep a copy of it too, to allow GATT-based beacon unlocking).
 
 ```
-// create and start a temporary beacon used to advertise conneectable mode
-mPivotBeacon = new EddystoneURL("http://cf.physical-web.org");
-Beacons.add(mPivotBeacon);
-
-mGattServer = new EddystoneGattServer(mPivotBeacon, new EddystoneGattServer.Listener() {
+mGattServer = new EddystoneGattServer(new EddystoneGattServer.Listener() {
     @Override
     public void onGattFinished(EddystoneBase configuredBeacon) {
         if (null != configuredBeacon) {
-            Beacons.add(configuredBeacon);
+            // take action. The (new) beacon is already saved
         }
-		
-		// remove temporary beacon used for GATT connection
-		Beacons.delete(mPivotBeacon.getId());
-    }
-}, new Loggable() {
-    @Override
-    public void log(String tag, final String message) {
-        // log however you want (note: not always called from main thread)
+        mGattServer = null;   // close() not needed here
     }
 });
+```
 
-// start with an empty UID advertiser with default settings.
-EddystoneUID currentBeacon = new EddystoneUID(new byte[16]);
+You can then start the GATT service, passing in an optional beacon as the configured beacon.
 
-hexUnlockKey = Util.binToHex(currentBeacon.getLockKey(), 0, 16, ' ');
+The beacon will become connectable while being configured, so most probably it will no longer advertise during this time.
 
-mGattServer.start(mConfigActivity, currentBeacon);
+```
+// use a new, blank, default Eddystone-UID beacon as the configured beacon
+boolean success = mGattServer.start(context)
 
-// ... when you are done
+// use a new Eddystone-URL that advertises its own Web Bluetooth config URL
+boolean success = mGattServer.start(context, "http://cf.physical-web.org")
+
+// make an existing beacon connectable and configurable. Note that this might mean it
+// can end up DELETED if the final configured beacon is of a separate type.
+boolean success = mGattServer.start(context, myExistingBeacon)
+
+if (success) {
+    // you should present the Unlock Key somehow to the user, since it's needed to connect to the beacon
+    String hexUnlockKey = Util.binToHex(mGattServer.getBeacon().getLockKey(), ' ');
+}
+```
+
+Don't forget to close the GATT service when no longer needed ("Cancel" button, activity/fragment closes, etc.)
+
+```
 mGattServer.close();
+```
+
+You can attach a simple logging callback to the GATT instance, to display relevant events:
+
+```
+// call this before start() to log start-up errors
+mGattServer.setLogger(new Loggable() {
+    @Override
+    public void log(String tag, final String message) {
+        // log however you want (note: this method is not always invoked from the original thread)
+        if(VERBOSE) Log.d(tag, message);
+    }
+});
 ```
 
 ## Ephemeral URLs
@@ -253,3 +285,15 @@ Retrieve the list of active and paused beacons by calling `Beacons.getActive()`
 Stopped beacons are saved to storage. To iterate over them, use `Beacons.getStopped()` to get a `Cursor`.
 
 While iterating over the cursor you can call `Storage.itemFromCursor()` to get actual items. 
+
+## Building the library
+
+Clone the repo and build the library:
+
+    ```
+    > git clone https://github.com/uriio/beacons-android
+    > cd beacons-android
+    > gradlew build
+    ```
+
+For a painless process, make sure your Android SDK and environment are correctly set-up.

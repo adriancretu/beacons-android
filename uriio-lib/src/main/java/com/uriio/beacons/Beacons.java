@@ -10,6 +10,7 @@ import android.util.Log;
 import com.uriio.beacons.api.ApiClient;
 import com.uriio.beacons.model.Beacon;
 import com.uriio.beacons.model.EddystoneBase;
+import com.uriio.beacons.model.EddystoneURL;
 import com.uriio.beacons.model.EphemeralURL;
 import com.uriio.beacons.model.iBeacon;
 
@@ -116,7 +117,10 @@ public class Beacons {
         initialize(context, null);
     }
 
-    public static Beacon add(Beacon spec/*, boolean persistent*/) {
+    public static<T extends Beacon> T add(T spec/*, boolean persistent*/) {
+        // don't add an already persisted beacon
+        if (spec.getId() > 0) return spec;
+
         if (true/*persistent*/) {
             switch (spec.getType()) {
                 case Beacon.EDDYSTONE_URL:
@@ -139,6 +143,10 @@ public class Beacons {
         return spec;
     }
 
+    public static EddystoneURL add(String url) {
+        return add(new EddystoneURL(url));
+    }
+
     /**
      * Deletes a beacon. If beacon is active, it will be stopped.
      * @param id    The beacon ID
@@ -151,6 +159,10 @@ public class Beacons {
             item.setStorageState(Storage.STATE_STOPPED);
             sendStateBroadcast(id);
         }
+    }
+
+    public static void delete(Beacon beacon) {
+        if (null != beacon && beacon.getId() > 0) delete(beacon.getId());
     }
 
     public static void setState(long itemId, int state) {

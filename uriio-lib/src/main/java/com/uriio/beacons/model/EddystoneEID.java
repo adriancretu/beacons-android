@@ -12,7 +12,7 @@ import java.security.GeneralSecurityException;
 public class EddystoneEID extends EddystoneBase {
     private byte[] mIdentityKey;
     private byte mRotationExponent;
-    private int mTimeOffset;
+    private int mClockOffset;
 
     private long mExpireTime = 0;
 
@@ -75,6 +75,12 @@ public class EddystoneEID extends EddystoneBase {
     }
 
     @Override
+    public EddystoneBase cloneBeacon() {
+        return new EddystoneEID(getIdentityKey(), getRotationExponent(), getClockOffset(),
+                getLockKey(), getAdvertiseMode(), getTxPowerLevel(), getName());
+    }
+
+    @Override
     public int getType() {
         return EDDYSTONE_EID;
     }
@@ -92,7 +98,7 @@ public class EddystoneEID extends EddystoneBase {
             data = new byte[8];
         }
 
-        mExpireTime = ((timeCounter >> mRotationExponent) + 1 << mRotationExponent) - mTimeOffset;
+        mExpireTime = ((timeCounter >> mRotationExponent) + 1 << mRotationExponent) - mClockOffset;
         mExpireTime *= 1000;
 
         EddystoneAdvertiser beacon = new EddystoneAdvertiser(data, 0, 8, advertisersManager,
@@ -110,7 +116,7 @@ public class EddystoneEID extends EddystoneBase {
     private void init(byte[] identityKey, byte rotationExponent, int timeOffset) {
         mIdentityKey = identityKey;
         mRotationExponent = rotationExponent;
-        mTimeOffset = timeOffset;
+        mClockOffset = timeOffset;
     }
 
     public byte[] getIdentityKey() {
@@ -121,11 +127,11 @@ public class EddystoneEID extends EddystoneBase {
         return mRotationExponent;
     }
 
-    public int getEidTimeOffset() {
-        return mTimeOffset;
+    public int getClockOffset() {
+        return mClockOffset;
     }
 
     public int getEidClock() {
-        return (int) (System.currentTimeMillis() / 1000 + mTimeOffset);
+        return (int) (System.currentTimeMillis() / 1000 + mClockOffset);
     }
 }

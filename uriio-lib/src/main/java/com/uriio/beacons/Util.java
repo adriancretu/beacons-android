@@ -76,6 +76,10 @@ public class Util {
         return new String(hex);
     }
 
+    public static String binToHex(byte[] raw, char separator) {
+        return binToHex(raw, 0, raw.length, separator);
+    }
+
     public static byte[] computeSha1Digest(byte[] data) {
         return computeDigest(data, "SHA-1");
     }

@@ -3,6 +3,7 @@ package com.uriio.beacons.ble.gatt;
 import android.bluetooth.le.AdvertiseSettings;
 import android.util.Base64;
 
+import com.uriio.beacons.BuildConfig;
 import com.uriio.beacons.Util;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
@@ -13,6 +14,7 @@ import com.uriio.beacons.model.EddystoneUID;
 import com.uriio.beacons.model.EddystoneURL;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * Manages a GATT-configurable Eddystone beacon.
@@ -20,31 +22,34 @@ import java.nio.ByteBuffer;
  */
 class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     private static final String TAG = "EddystoneGattConfig";
+    private static final boolean D = BuildConfig.DEBUG;
 
     /**
      * The configured beacon. This will never broadcast during configuration, because starting
      * or stopping any LE advertiser kills the GATT connection and Beacon Tools crashes during EID registration.
      */
-    private EddystoneBase mBeacon;
+    private EddystoneBase mConfiguredBeacon = null;
+    private final EddystoneBase mOriginalBeacon;
     private boolean mIsAdvertisingSet = false;
 
-    public EddystoneGattConfigurator(EddystoneBase initialBeacon) {
-        mBeacon = initialBeacon;
+    public EddystoneGattConfigurator(EddystoneBase beacon) {
+        mOriginalBeacon = beacon;
     }
 
     /**
      * @return Current beacon configuration, or null if advertising data is not yet set.
      */
     public EddystoneBase getConfiguredBeacon() {
-        return mIsAdvertisingSet ? mBeacon : null;
+        return mIsAdvertisingSet ? getModifiedOrOriginalBeacon() : null;
     }
 
     @Override
     public byte[] getAdvertisedData() {
-        if (null == mBeacon) return new byte[0];
+        // use either the currently altered beacon, or the original one
+        EddystoneBase beacon = getModifiedOrOriginalBeacon();
 
-        if (mBeacon.getType() == Beacon.EDDYSTONE_EID) {
-            EddystoneEID eddystoneEID = (EddystoneEID) this.mBeacon;
+        if (beacon.getType() == Beacon.EDDYSTONE_EID) {
+            EddystoneEID eddystoneEID = (EddystoneEID) this.mConfiguredBeacon;
 
             ByteBuffer buffer = ByteBuffer.allocate(14);
 
@@ -55,17 +60,27 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
             return buffer.array();
         }
-        return ((EddystoneAdvertiser) mBeacon.createBeacon(null)).getServiceData();
+        return ((EddystoneAdvertiser) beacon.createBeacon(null)).getServiceData();
     }
 
     @Override
     public void advertiseURL(String url) {
-        if (mBeacon.getType() != Beacon.EDDYSTONE_URL) {
-            mBeacon = new EddystoneURL(0, url, mBeacon.getLockKey(), mBeacon.getAdvertiseMode(),
-                    mBeacon.getTxPowerLevel(), mBeacon.getName());
+        EddystoneBase beacon = getModifiedOrOriginalBeacon();
+
+        boolean sameType = beacon.getType() == Beacon.EDDYSTONE_URL;
+        boolean changed = !sameType;
+        if (sameType) {
+            String currentUrl = ((EddystoneURL) beacon).getURL();
+            changed = (null == url && null != currentUrl) || (null != url && !url.equals(currentUrl));
         }
-        else {
-            ((EddystoneURL) mBeacon).edit().setUrl(url).apply();
+
+        if (changed) {
+            if (null == mConfiguredBeacon || !sameType) {
+                mConfiguredBeacon = new EddystoneURL(0, url, beacon.getLockKey(), beacon.getAdvertiseMode(),
+                        beacon.getTxPowerLevel(), beacon.getName());
+            } else {
+                ((EddystoneURL) mConfiguredBeacon).edit().setUrl(url).apply();
+            }
         }
 
         mIsAdvertisingSet = true;
@@ -73,12 +88,22 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
     @Override
     public void advertiseUID(byte[] namespaceInstance) {
-        if (mBeacon.getType() != Beacon.EDDYSTONE_UID) {
-            mBeacon = new EddystoneUID(0, namespaceInstance, null, mBeacon.getLockKey(),
-                    mBeacon.getAdvertiseMode(), mBeacon.getTxPowerLevel(), mBeacon.getName());
+        EddystoneBase beacon = getModifiedOrOriginalBeacon();
+
+        boolean sameType = beacon.getType() == Beacon.EDDYSTONE_UID;
+        boolean changed = !sameType;
+        if (sameType) {
+            byte[] current = ((EddystoneUID) beacon).getNamespaceInstance();
+            changed = !Arrays.equals(current, namespaceInstance);
         }
-        else {
-            ((EddystoneUID) mBeacon).edit().setNamespaceInstance(namespaceInstance).apply();
+
+        if (changed) {
+            if (null == mConfiguredBeacon || beacon.getType() != Beacon.EDDYSTONE_UID) {
+                mConfiguredBeacon = new EddystoneUID(0, namespaceInstance, null, beacon.getLockKey(),
+                        beacon.getAdvertiseMode(), beacon.getTxPowerLevel(), beacon.getName());
+            } else {
+                ((EddystoneUID) mConfiguredBeacon).edit().setNamespaceInstance(namespaceInstance).apply();
+            }
         }
 
         mIsAdvertisingSet = true;
@@ -86,25 +111,38 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
     @Override
     public void advertiseEID(byte[] identityKey, byte rotationExponent) {
-        // NOTE - this call assumes that the beacon has just been EID registered, or that registration
-        // is in progress. The time counter is initialized to 65280, and to account for this,
-        // the actual offset to real time is saved as a persistent property for future beacon restarts
-        // Latency to HTTP calls for registration, or a wrong device time setting, may impact EID accuracy.
+        EddystoneBase beacon = getModifiedOrOriginalBeacon();
 
-        int now = (int) (System.currentTimeMillis() / 1000);
-        // https://github.com/google/eddystone/blob/master/eddystone-eid/eid-computation.md#implementation-guidelines
-        int timeCounter = now & ~0xffff | 65280;
+        boolean sameType = beacon.getType() == Beacon.EDDYSTONE_EID;
+        boolean changed = !sameType;
+        if (sameType) {
+            EddystoneEID eidBeacon = (EddystoneEID) beacon;
+            changed = rotationExponent != eidBeacon.getRotationExponent() || !Arrays.equals(identityKey, eidBeacon.getIdentityKey());
+        }
 
-        // save the offset between current time and time counter so we can restore correctly
-        int timeOffset = now - timeCounter;
+        if (changed) {
+            // NOTE - because we don't have the EID clock offset from real-time, used at registration,
+            // this call assumes that a new beacon has just been EID registered, or that registration
+            // is in progress. The time counter is initialized to 65280, and to account for this,
+            // the actual offset to real time is saved as a persistent property for future beacon restarts
+            // Latency to HTTP calls for registration, or a wrong device time setting, may impact EID accuracy.
 
-        mBeacon = new EddystoneEID(identityKey, rotationExponent, timeOffset, mBeacon.getLockKey(),
-                mBeacon.getAdvertiseMode(), mBeacon.getTxPowerLevel(), mBeacon.getName());
+            int now = (int) (System.currentTimeMillis() / 1000);
+            // https://github.com/google/eddystone/blob/master/eddystone-eid/eid-computation.md#implementation-guidelines
+            int timeCounter = now & ~0xffff | 65280;
+
+            // save the offset between current time and time counter so we can restore correctly
+            int clockOffset = now - timeCounter;
+
+            mConfiguredBeacon = new EddystoneEID(identityKey, rotationExponent, clockOffset, beacon.getLockKey(),
+                    beacon.getAdvertiseMode(), beacon.getTxPowerLevel(), beacon.getName());
+
+            if (D) Util.log(TAG, "advertiseEID clockOffset = " + clockOffset
+                    + " identityKey = " + Base64.encodeToString(identityKey, Base64.URL_SAFE)
+                    + " rotationExponent = " + rotationExponent);
+        }
 
         mIsAdvertisingSet = true;
-
-        Util.log(TAG, "advertiseEID timeOffset = " + timeOffset + " identityKey = "
-                + Base64.encodeToString(identityKey, Base64.URL_SAFE) + " rotationExponent = " + rotationExponent);
     }
 
     @Override
@@ -120,18 +158,19 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
     @Override
     public int getRadioTxPower() {
-        return AdvertisersManager.getSupportedRadioTxPowers()[mBeacon.getTxPowerLevel()];
+        return AdvertisersManager.getSupportedRadioTxPowers()[getModifiedOrOriginalBeacon().getTxPowerLevel()];
     }
 
     @Override
     public int getAdvertisedTxPower() {
-        return AdvertisersManager.getZeroDistanceTxPower(mBeacon.getTxPowerLevel());
+        return AdvertisersManager.getZeroDistanceTxPower(getModifiedOrOriginalBeacon().getTxPowerLevel());
     }
 
     @Override
     public byte[] getEidIdentityKey() {
-        if (mBeacon.getType() ==  Beacon.EDDYSTONE_EID) {
-            return ((EddystoneEID) mBeacon).getIdentityKey();
+        EddystoneBase beacon = getModifiedOrOriginalBeacon();
+        if (beacon.getType() ==  Beacon.EDDYSTONE_EID) {
+            return ((EddystoneEID) beacon).getIdentityKey();
         }
         return null;
     }
@@ -139,14 +178,19 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     @Override
     public int setRadioTxPower(byte txPower) {
         byte[] txPowers = getSupportedRadioTxPowers();
-        int txPowerLevel = 0;
+        @Beacon.AdvertiseTxPower int txPowerLevel = 0;
 
         for (int i = 0; i < txPowers.length; i++) {
-            if (txPower >= txPowers[i]) txPowerLevel = i;
+            if (txPower >= txPowers[i]) {
+                //noinspection WrongConstant
+                txPowerLevel = i;
+            }
         }
 
-        //noinspection WrongConstant
-        mBeacon.edit().setAdvertiseTxPower(txPowerLevel).apply();
+        if (txPowerLevel != getModifiedOrOriginalBeacon().getTxPowerLevel()) {
+            // restarting a beacon destroys the GATT connection, make sure we use a stopped clone
+            getOrCloneConfiguredBeacon().edit().setAdvertiseTxPower(txPowerLevel).apply();
+        }
 
         return txPowers[txPowerLevel];
     }
@@ -168,14 +212,17 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
             mode = AdvertiseSettings.ADVERTISE_MODE_BALANCED;
         }
 
-        mBeacon.edit().setAdvertiseMode(mode).apply();
+        if (mode != getModifiedOrOriginalBeacon().getAdvertiseMode()) {
+            // restarting a beacon destroys the GATT connection, make sure we use a stopped clone
+            getOrCloneConfiguredBeacon().edit().setAdvertiseMode(mode).apply();
+        }
 
         return getAdvertiseInterval();
     }
 
     @Override
     public int getAdvertiseInterval() {
-        switch (mBeacon.getAdvertiseMode()) {
+        switch (getModifiedOrOriginalBeacon().getAdvertiseMode()) {
             case AdvertiseSettings.ADVERTISE_MODE_LOW_POWER:
             default:
                 return 1000;
@@ -188,11 +235,25 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
     @Override
     public byte[] getLockKey() {
-        return mBeacon.getLockKey();
+        return getModifiedOrOriginalBeacon().getLockKey();
     }
 
     @Override
     public void setLockKey(byte[] lockKey) {
-        mBeacon.edit().setLockKey(lockKey).apply();
+        // in case beacon is not yet modified, lock key is saved to original
+        // if beacon is modified, the new lock key will be copied anyway when it's created
+        getModifiedOrOriginalBeacon().edit().setLockKey(lockKey).apply();
+    }
+
+    private EddystoneBase getModifiedOrOriginalBeacon() {
+        return null != mConfiguredBeacon ? mConfiguredBeacon : mOriginalBeacon;
+    }
+
+    private EddystoneBase getOrCloneConfiguredBeacon() {
+        if (null == mConfiguredBeacon) {
+            mConfiguredBeacon = mOriginalBeacon.cloneBeacon();
+        }
+
+        return mConfiguredBeacon;
     }
 }

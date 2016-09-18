@@ -9,17 +9,21 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.Context;
+import android.support.annotation.NonNull;
 
+import com.uriio.beacons.Beacons;
 import com.uriio.beacons.Loggable;
 import com.uriio.beacons.Util;
 import com.uriio.beacons.model.EddystoneBase;
+import com.uriio.beacons.model.EddystoneUID;
+import com.uriio.beacons.model.EddystoneURL;
 
 import java.util.List;
 
 import static android.content.Context.BLUETOOTH_SERVICE;
 
 /**
- * Bluetooth GATT Server hosting an Eddystone config service.
+ * Manages an Eddystone-GATT config service.
  */
 public class EddystoneGattServer extends BluetoothGattServerCallback {
     public interface Listener {
@@ -32,17 +36,32 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
     private EddystoneGattService mEddystoneGattService = null;
     private BluetoothGattServer mGattServer;
     private Listener mListener;
-    private EddystoneBase mPivotBeacon;
+    private EddystoneBase mBeacon = null;
     private Loggable mLogger;
     private BluetoothManager mBluetoothManager;
+    private boolean mStarted = false;
+    private boolean mIsBeaconNew = false;
 
-    public EddystoneGattServer(EddystoneBase pivotBeacon, Listener listener, Loggable loggable) {
+    public EddystoneGattServer(Listener listener) {
         mListener = listener;
-        mPivotBeacon = pivotBeacon;
+    }
+
+    public void setLogger(Loggable loggable) {
         mLogger = loggable;
     }
 
-    public boolean start(Context context, EddystoneBase currentBeacon) {
+    /**
+     * Atempts to add this GATT service to the device's GATT server.
+     * @param context   A valid context, used to retrieve the Bluetooth service.
+     * @param beacon    The initial beacon that will become connectable and be presented as configured currently.
+     * @return True if the GATT service was successfully added to the device's Bluetooth GATT server.
+     * Only one GATT service can run on the same device at the same time.
+     */
+    public boolean start(@NonNull Context context, @NonNull EddystoneBase beacon) {
+        if (mStarted) return false;
+
+        mBeacon = beacon;
+
         mBluetoothManager = (BluetoothManager) context.getSystemService(BLUETOOTH_SERVICE);
         mGattServer = mBluetoothManager.openGattServer(context, this);
         if (null == mGattServer) {
@@ -53,28 +72,53 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
         List<BluetoothGattService> gattServices = mGattServer.getServices();
         for (BluetoothGattService service : gattServices) {
             if (service.getUuid() == EddystoneGattService.UUID_EDDYSTONE_GATT_SERVICE) {
-                log("An Eddystone GATT service is already running on this device");
+                log("Another Eddystone-GATT service is already being served by this device");
                 close();
                 return false;
             }
         }
 
-        mEddystoneConfigurator = new EddystoneGattConfigurator(currentBeacon);
+        mEddystoneConfigurator = new EddystoneGattConfigurator(beacon);
 
         mEddystoneGattService = new EddystoneGattService(this, mEddystoneConfigurator);
         if (!mGattServer.addService(mEddystoneGattService.getService())) {
-            log("Failed to add Eddystone GATT service");
+            log("Eddystone-GATT service registration failed");
             close();
             return false;
         }
 
-        if (null != mPivotBeacon) {
-            // advertise beacon as connectable
-            log("Setting pivot beacon connectable");
-            mPivotBeacon.edit().setConnectable(true).apply();
-        }
+        // advertise beacon as connectable
+        log("Setting beacon connectable");
+        beacon.edit().setConnectable(true).apply();
 
         return true;
+    }
+
+    /**
+     * Starts the GATT service with a blank Eddystone-UID as the initial configured beacon
+     */
+    public boolean start(Context context) {
+        if (mStarted) return false;
+
+        mIsBeaconNew = true;
+        return start(context, Beacons.add(new EddystoneUID()));
+    }
+
+    /**
+     * @param url    An URL to use as the initial Eddystone-URL configurable / connectable beacon
+     */
+    public boolean start(Context context, String url) {
+        if (mStarted) return false;
+
+        mIsBeaconNew = true;
+        return start(context, Beacons.add(new EddystoneURL(url)));
+    }
+
+    /**
+     * @return The currently configured beacon. May be null if an authenticated user reset it.
+     */
+    public EddystoneBase getBeacon() {
+        return mBeacon;
     }
 
     public void close() {
@@ -83,14 +127,33 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
             mGattServer = null;
         }
 
-        if (null != mPivotBeacon) {
-            log("Setting pivot beacon un-connectable");
-            mPivotBeacon.edit().setConnectable(false).apply();
-            mPivotBeacon = null;
-        }
+        if (null != mBeacon) {
+            EddystoneBase configuredBeacon = mEddystoneConfigurator.getConfiguredBeacon();
+            if (null != configuredBeacon) {
+                if (configuredBeacon != mBeacon) {
+                    // configured beacon is not the original beacon, add it and remove original
+                    Beacons.add(configuredBeacon);
+                    Beacons.delete(mBeacon);
+                }
+            }
 
-        mListener.onGattFinished(null == mEddystoneConfigurator ? null :
-                mEddystoneConfigurator.getConfiguredBeacon());
+            if (mIsBeaconNew) {
+                if (null == configuredBeacon) {
+                    // remove temporary beacon used for GATT connectable advertising
+                    Beacons.delete(mBeacon);
+                }
+            } else {
+                log("Setting beacon un-connectable");
+                mBeacon.edit().setConnectable(false).apply();
+            }
+
+
+            if (null != mListener) {
+                mListener.onGattFinished(null == mEddystoneConfigurator ? null : configuredBeacon);
+            }
+
+            mBeacon = null;
+        }
     }
 
     @Override
@@ -150,9 +213,9 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
 //        mGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, new byte[0]);
     }
 
-    public void keepSingleConnected(BluetoothDevice allowedDevice) {
+    void disconnectAll(BluetoothDevice allowedDevice) {
         for (BluetoothDevice device : mBluetoothManager.getConnectedDevices(BluetoothProfile.GATT)) {
-            if (!allowedDevice.equals(device)) {
+            if (!device.equals(allowedDevice)) {
                 log(String.format("Disconnecting %s", device));
                 mGattServer.cancelConnection(device);
             }

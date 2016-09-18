@@ -197,7 +197,7 @@ public class EddystoneGattService {
 
         if (isLocked()) {
             if (characteristic == mUnlockCharacteristic) {
-                log("Generating new SecureRandom unlock challenge");
+                log("Generating secure unlock challenge");
                 characteristic.setValue(new byte[16]);
                 new SecureRandom().nextBytes(characteristic.getValue());
             } else {
@@ -246,10 +246,10 @@ public class EddystoneGattService {
                 if (value.length == 16) {
                     byte[] token = aes_transform(true, characteristic.getValue(), 0, 16);
                     if (Arrays.equals(token, value)) {
-                        log(String.format("%s Unlock success", device));
+                        log(String.format("Unlocked by %s", device));
 
                         mOwnerDevice = device;
-                        mGattServer.keepSingleConnected(device);
+                        mGattServer.disconnectAll(device);
                         characteristic.setValue((byte[]) null);
                         mLockStateCharacteristic.setValue(new byte[] { LOCK_STATE_UNLOCKED});
 
@@ -257,7 +257,7 @@ public class EddystoneGattService {
                     }
                     else log("Unlock failed!");
                 }
-                else log(String.format("Invalid unlock length: %d", value.length));
+                else log(String.format("Unlock: expected 16 bytes, got %d", value.length));
             }
 
             log("Beacon locked - write request denied");
@@ -265,7 +265,7 @@ public class EddystoneGattService {
         }
 
         if (characteristic == mLockStateCharacteristic) {
-            if (value[0] == LOCK_STATE_LOCKED && value.length == 17) {
+            if (LOCK_STATE_LOCKED == value[0] && 17 == value.length) {
                 mLockKey = aes_transform(false, value, 1, 16);
                 mConfigCallback.setLockKey(mLockKey);
                 log("Lock key changed");
@@ -302,62 +302,69 @@ public class EddystoneGattService {
                 log("Invalid Advertise Interval value size: " + value.length);
             }
         } else if (characteristic == mAdvSlotDataCharacteristic) {
-            switch (value[0]) {
-                case 0x00: // UID
-                    if (value.length == 1) {
-                        // TODO: 5/25/2016 - check if array is empty, according to spec
-                        log("Clearing beacon advertisement format");
-                        mConfigCallback.stopAdvertise();
-                    }
-                    else {
-                        log("Setting UID frame " + Util.binToHex(value, 1, 16, ' '));
-                        mConfigCallback.advertiseUID(Arrays.copyOfRange(value, 1, 17));
-                    }
-                    break;
-                case 0x10: // URL
-                    String url = UriBeacon.decodeUri(Arrays.copyOfRange(value, 1, value.length), 0);
-                    log("Setting URL frame: " + url);
-                    mConfigCallback.advertiseURL(url);
-                    break;
-                case 0x20: // TLM
-                    log("TLM format is not supported");
-                    break;
-                case 0x30: // EID
-                    if (value.length == 34) {
-                        byte[] serverPublicKey = Arrays.copyOfRange(value, 1, 33);
-                        byte rotationExponent = value[33];
-                        log(String.format("Computing Identity Key with rotation exponent %d and server PublicKey %s",
-                                rotationExponent, Util.binToHex(serverPublicKey)));
-
-                        log("Generating new ECDH Private Key");
-                        mEidKeyPair = Curve25519.getInstance(Curve25519.BEST).generateKeyPair();
-
-                        byte[] sharedSecret = EIDUtils.computeSharedSecret(serverPublicKey, mEidKeyPair.getPrivateKey());
-
-                        byte[] identityKey;
-                        try {
-                            identityKey = EIDUtils.computeIdentityKey(sharedSecret, serverPublicKey, mEidKeyPair.getPublicKey());
-                        } catch (InvalidKeyException e) {
-                            return BluetoothGatt.GATT_FAILURE;
-                        } catch (NoSuchAlgorithmException e) {
-                            return BluetoothGatt.GATT_FAILURE;
-                        }
-
-//                        Util.log(TAG, "IK: " + Util.binToHex(identityKey));
-                        mConfigCallback.advertiseEID(identityKey, rotationExponent);
-                    }
-                    else if (value.length == 18) {
-                        log("WARNING!!! Received direct IdentityKey. Rotation exponent is " + value[17]);
-                        byte[] identityKey = aes_transform(false, value, 1, 16);
-                        mConfigCallback.advertiseEID(identityKey, value[17]);
-                    }
-                    break;
-            }
+            handleWriteAdvertiseSlotData(value);
         } else if (characteristic == mFactoryResetCharacteristic) {
             if (0x0B == value[0]) {
                 factoryReset();
             }
         }
+
+        return BluetoothGatt.GATT_SUCCESS;
+    }
+
+    private int handleWriteAdvertiseSlotData(byte[] value) {
+        switch (value[0]) {     // the frame type
+            case 0x00: // UID
+                if (value.length == 1) {
+                    // TODO: 5/25/2016 - check if array is empty, according to spec
+                    log("Clearing beacon advertisement format");
+                    mConfigCallback.stopAdvertise();
+                }
+                else {
+                    log("Setting UID frame " + Util.binToHex(value, 1, 16, ' '));
+                    mConfigCallback.advertiseUID(Arrays.copyOfRange(value, 1, 17));
+                }
+                break;
+            case 0x10: // URL
+                String url = UriBeacon.decodeUri(Arrays.copyOfRange(value, 1, value.length), 0);
+                log("Setting URL frame: " + url);
+                mConfigCallback.advertiseURL(url);
+                break;
+            case 0x20: // TLM
+                log("TLM format is not supported");
+                break;
+            case 0x30: // EID
+                if (value.length == 34) {
+                    byte[] serverPublicKey = Arrays.copyOfRange(value, 1, 33);
+                    byte rotationExponent = value[33];
+                    log(String.format("Computing Identity Key with rotation exponent %d and server PublicKey %s",
+                            rotationExponent, Util.binToHex(serverPublicKey)));
+
+                    log("Generating ECDH Private Key");
+                    mEidKeyPair = Curve25519.getInstance(Curve25519.BEST).generateKeyPair();
+
+                    byte[] sharedSecret = EIDUtils.computeSharedSecret(serverPublicKey, mEidKeyPair.getPrivateKey());
+
+                    byte[] identityKey;
+                    try {
+                        identityKey = EIDUtils.computeIdentityKey(sharedSecret, serverPublicKey, mEidKeyPair.getPublicKey());
+                    } catch (InvalidKeyException e) {
+                        return BluetoothGatt.GATT_FAILURE;
+                    } catch (NoSuchAlgorithmException e) {
+                        return BluetoothGatt.GATT_FAILURE;
+                    }
+
+//                        Util.log(TAG, "IK: " + Util.binToHex(identityKey));
+                    mConfigCallback.advertiseEID(identityKey, rotationExponent);
+                }
+                else if (value.length == 18) {
+                    log("WARNING!!! Received direct IdentityKey. Rotation exponent is " + value[17]);
+                    byte[] identityKey = aes_transform(false, value, 1, 16);
+                    mConfigCallback.advertiseEID(identityKey, value[17]);
+                }
+                break;
+        }
+
         return BluetoothGatt.GATT_SUCCESS;
     }
 

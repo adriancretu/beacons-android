@@ -511,7 +511,7 @@ public class Storage extends SQLiteOpenHelper {
 
                 // only copy the first 16 bytes (the source array might be bigger than 16)
                 System.arraycopy(eddystoneEID.getIdentityKey(), 0, data, 0, 16);
-                ByteBuffer.wrap(data, 16, 4).putInt(eddystoneEID.getEidTimeOffset());
+                ByteBuffer.wrap(data, 16, 4).putInt(eddystoneEID.getClockOffset());
                 data[20] = eddystoneEID.getRotationExponent();
 
                 return Base64.encodeToString(data, Base64.NO_PADDING);

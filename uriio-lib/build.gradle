@@ -42,7 +42,8 @@ dependencies {
     testCompile 'junit:junit:4.12'
 }
 
-apply plugin: 'com.github.dcendents.android-maven'
+apply plugin: 'maven'
+apply plugin: 'signing'
 
 task javadocsJar(type: Jar, dependsOn: generateReleaseJavadoc) {
     classifier = 'javadoc'
@@ -55,18 +56,60 @@ task sourcesJar(type: Jar) {
     from android.sourceSets.main.java.srcDirs
 }
 
-install {
-    repositories.mavenInstaller {
-        pom.project {
-            name 'UriIO Android BLE beacons advertising library'
-            groupId 'com.uriio'
-            artifactId 'beacons-android'
-            version PUBLISH_VERSION
-        }
-    }
-}
-
 artifacts {
     archives sourcesJar
     archives javadocsJar
+}
+
+signing {
+    sign configurations.archives
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            pom.project {
+                name 'com.uriio:beacons-android'
+                packaging 'aar'
+
+                groupId 'com.uriio'
+                artifactId 'beacons-android'
+                version PUBLISH_VERSION
+
+                description 'Android BLE beacons advertising library'
+                url 'https://github.com/uriio/beacons-android'
+
+                scm {
+                    connection 'scm:git:git@github.com:uriio/beacons-android.git'
+                    developerConnection 'scm:git:git@github.com:uriio/beacons-android.git'
+                    url 'git@github.com:uriio/beacons-android.git'
+                }
+
+                licenses {
+                    license {
+                        name 'The Apache License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id 'adriancretu'
+                        name 'Adrian Cretu'
+                        email 'numedecod@gmail.com'
+                    }
+                }
+            }
+        }
+    }
 }

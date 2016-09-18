@@ -45,6 +45,8 @@ public abstract class EddystoneBase extends Beacon {
         return mLockKey;
     }
 
+    public abstract EddystoneBase cloneBeacon();
+
     @Override
     public EddystoneEditor edit() {
         return new EddystoneEditor();
