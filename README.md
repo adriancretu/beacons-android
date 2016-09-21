@@ -286,10 +286,11 @@ To provide a hook to the action to be taken when the notification is tapped, do 
        <!-- Replace with your receiver. Make sure it remains non-exported -->
        <receiver android:name=".MyReceiver" android:exported="false"/>
        
-       <!-- REPLACE <my-package-name> and MyReceiverwith actual (sub)package and class name -->
+       <!-- REPLACE <my-package-name> and MyReceiver with actual (sub)package and class name -->
        <meta-data android:name="com.uriio.receiver" android:value="<my-package-name>.MyReceiver" />
     ```
 3. Respond to the user tapping the notification content, in your receiver:
+
     ```java
         @Override
         public void onReceive(Context context, Intent intent) {
