@@ -1,5 +1,7 @@
 ## Android BLE beacon advertising library
 
+This library is used by the [Beacon Toy](https://play.google.com/store/apps/details?id=com.uriio) app and is also the main dependency for [Ephemeral URL beacons](https://github.com/uriio/uriio-android)
+
 - [Description](#description)
 - [Features](#features)
 - [Setup](#setup)
@@ -25,7 +27,6 @@ This is not a *beacon scanning* library. Please use either the Nearby API, or (f
 ### Description
 
 Broadcast Bluetooth Low Energy beacons directly from Android 5.0 or later, on devices that support BLE peripheral mode.
-This library is used by the [Beacon Toy](https://play.google.com/store/apps/details?id=com.uriio) app.
 
 Examples of supported devices:
 
@@ -51,9 +52,6 @@ Examples of supported devices:
       * setting up an Eddystone-URL remotely with Web Bluetooth, just by using Chrome
 - Persistent Service that manages the virtual beacons and their states
 - Beacons are saved to device storage for later reuse
-- [Ephemeral URL](https://github.com/uriio/ephemeral-api) API:
-   * register long URLs which can be later changed
-   * advertise ephemeral (or static) short URLs that redirect
 
 *CAREFUL* - the service will restore active beacons when it (re)starts, so be sure that you either stop or delete a beacon after you no longer need it, If your app crashes, the service may restart and bring the beacon back, so make sure you check what beacons are enabled and stop the ones that you no longer need. Besides freeing resources, every device has a maximum number of concurrent BLE broadcasters (4 on Nexus 6; 8 on Galaxy S7, etc.). When this number is reached, new beacons will fail to start.
 
@@ -94,7 +92,8 @@ Beacons.add("https://github.com").edit().setName("an awesome beacon").apply();
 ```
 
 After adding a beacon, it will begin to advertise immediately if Bluetooth is on (or when it gets enabled).
-Because starting up a beacon is an Android async operation, if there's an error, a broadcast is sent by the service. See the `BleService` class to see the action names of the Intent that you would need to register a receiver for.
+Because starting up a beacon is an Android async operation, if there's an error, a broadcast is sent by the service.
+See the [listening for events](#listening-for-events) section for how to handle this.
 
 All beacon constructors support extra arguments, to set their initial properties like Advertise mode, TX power, lock key, or name.
 
@@ -255,17 +254,17 @@ the receiver can't be called from other applications. Likewise, global receivers
         if (BleService.ACTION_BEACONS.equals(intent.getAction())) {
             // some events also contain beacon IDs, or error message / code
             switch (intent.getIntExtra(BleService.EXTRA_BEACON_EVENT, 0)) {
-                case BleService.EVENT_ADVERTISER_ADDED:
+                case BleService.EVENT_ADVERTISER_ADDED:   // new beacon added
                     break;
-                case BleService.EVENT_ADVERTISER_STARTED:
+                case BleService.EVENT_ADVERTISER_STARTED: // BLE transmit on
                     break;
-                case BleService.EVENT_ADVERTISER_STOPPED:
+                case BleService.EVENT_ADVERTISER_STOPPED: // BLE transmit off
                     break;
-                case BleService.EVENT_ADVERTISER_FAILED:
+                case BleService.EVENT_ADVERTISER_FAILED:  // error
                     break;
                 case BleService.EVENT_ADVERTISE_UNSUPPORTED:
                     break;
-                case BleService.EVENT_SHORTURL_FAILED:
+                case BleService.EVENT_SHORTURL_FAILED:    // reserved for Ephemeral URLs
                     break;
             }
         }
@@ -314,4 +313,3 @@ Clone the repo and build the library:
 ```
 
 For a painless process, make sure your Android SDK and environment are correctly set-up.
-
