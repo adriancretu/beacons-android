@@ -7,34 +7,20 @@ import android.database.Cursor;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
-import com.uriio.beacons.api.ApiClient;
 import com.uriio.beacons.model.Beacon;
 import com.uriio.beacons.model.EddystoneBase;
 import com.uriio.beacons.model.EddystoneURL;
 import com.uriio.beacons.model.EphemeralURL;
 import com.uriio.beacons.model.iBeacon;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * BLE Beacons API
- * Created on 4/28/2016.
+ * Beacons API wrapper.
  */
 public class Beacons {
-    /**
-     * Generic listener for the result of an operation.
-     * @param <T>    Specialized result type
-     */
-    public interface OnResultListener<T> {
-        /**
-         * Result callback.
-         * @param result    The call's result, or null if there was an error.
-         * @param error     Encountered error, or null if none.
-         */
-        void onResult(T result, Throwable error);
-    }
-
     private static final String TAG = "Beacons";
 
     private static final String PREF_API_KEY = "apiKey";
@@ -46,15 +32,18 @@ public class Beacons {
     /** Singleton */
     private static Beacons _instance = null;
 
-    private final Context mAppContext;
-    private final ApiClient mUriioClient;
+    // don't leak the context; also makes Lint happy
+    private WeakReference<Context> mAppContext;
 
     /** List of active items **/
     private List<Beacon> mActiveItems = new ArrayList<>();
 
-    private Beacons(Context context, String apiKey) {
-        mAppContext = context.getApplicationContext();
-        mUriioClient = null == apiKey ? null : new ApiClient(apiKey);
+    private Beacons(Context context) {
+        setContext(context);
+    }
+
+    private void setContext(Context context) {
+        mAppContext = new WeakReference<>(context.getApplicationContext());
     }
 
     static Beacons getInstance() {
@@ -68,25 +57,29 @@ public class Beacons {
     static void reinitialize(Context context) {
         // restore from saved config
         SharedPreferences sharedPrefs = context.getSharedPreferences(PREFS_FILENAME, 0);
-        String apiKey = sharedPrefs.getString(PREF_API_KEY, null);
-        initialize(context, apiKey, sharedPrefs.getString(PREF_DB_NAME, DEFAULT_DATABASE_NAME));
+        initialize(context, sharedPrefs.getString(PREF_DB_NAME, DEFAULT_DATABASE_NAME));
     }
 
     /**
      * Initialize the API and use a custom persistence namespace.
      * @param context   The calling context from which to get the application context.
-     * @param apiKey    Your API Key. May be null if you don't intend to use Ephemeral URLs.
      * @param dbName    Database name to use for opening and storing beacons.
      */
-    public static void initialize(Context context, String apiKey, String dbName) {
-        if (null != _instance) Log.w(TAG, "Already initialized");
+    public static void initialize(Context context, String dbName) {
+        if (null != _instance) {
+            // singleton exists, so just set the app context
+            _instance.setContext(context);
+            Log.d(TAG, "initialized");
+        }
         else {
-            _instance = new Beacons(context, apiKey);
+            _instance = new Beacons(context);
+
+            if (null == dbName) dbName = DEFAULT_DATABASE_NAME;
             Storage.init(context, dbName);
 
             // save this last config so we can restore ourselves if needed
             context.getSharedPreferences(PREFS_FILENAME, Context.MODE_PRIVATE).edit()
-                    .putString(PREF_API_KEY, apiKey)
+                    .remove(PREF_API_KEY)             // obsolete
                     .putString(PREF_DB_NAME, dbName)
                     .apply();
 
@@ -105,42 +98,55 @@ public class Beacons {
 
     /**
      * Initialize the API with the default persistence namespace.
-     * @param context   The calling context from which to get the application context.
-     * @param apiKey    Your API Key. May be null if you don't intend to use Ephemeral URLs.
+     * @param context   The calling context.
      */
     @SuppressWarnings("unused")
-    public static void initialize(Context context, String apiKey) {
-        initialize(context, apiKey, DEFAULT_DATABASE_NAME);
-    }
-
     public static void initialize(Context context) {
-        initialize(context, null);
+        initialize(context, DEFAULT_DATABASE_NAME);
     }
 
-    public static<T extends Beacon> T add(T spec/*, boolean persistent*/) {
+    /**
+     * Stops the background BLE service all-together.
+     */
+    public static void shutdown() {
+        Context context = getContext();
+        if (null != context) {
+            context.stopService(new Intent(context, BleService.class));
+
+            // detach Context weak ref
+            _instance.mAppContext.clear();
+        }
+    }
+
+    static void onBleServiceDestroyed() {
+        // time to LET IT GO
+        _instance = null;
+    }
+
+    public static<T extends Beacon> T add(T beacon/*, boolean persistent*/) {
         // don't add an already persisted beacon
-        if (spec.getId() > 0) return spec;
+        if (beacon.getId() > 0) return beacon;
 
         if (true/*persistent*/) {
-            switch (spec.getType()) {
+            switch (beacon.getType()) {
                 case Beacon.EDDYSTONE_URL:
                 case Beacon.EDDYSTONE_UID:
                 case Beacon.EDDYSTONE_EID:
-                    Storage.getInstance().insertEddystoneItem((EddystoneBase) spec);
+                    Storage.getInstance().insertEddystoneItem((EddystoneBase) beacon);
                     break;
                 case Beacon.EPHEMERAL_URL:
-                    Storage.getInstance().insertUriioItem((EphemeralURL) spec);
+                    Storage.getInstance().insertUriioItem((EphemeralURL) beacon);
                     break;
                 case Beacon.IBEACON:
-                    Storage.getInstance().insertAppleBeaconItem((iBeacon) spec);
+                    Storage.getInstance().insertAppleBeaconItem((iBeacon) beacon);
                     break;
             }
         }
 
-        getInstance().mActiveItems.add(spec);
-        setState(spec.getId(), Storage.STATE_ENABLED);
+        getInstance().mActiveItems.add(beacon);
+        enable(beacon);
 
-        return spec;
+        return beacon;
     }
 
     public static EddystoneURL add(String url) {
@@ -165,28 +171,40 @@ public class Beacons {
         if (null != beacon && beacon.getId() > 0) delete(beacon.getId());
     }
 
-    public static void setState(long itemId, int state) {
-        if (state >= 0 && state <= 2) {
+    private static void setState(Beacon beacon, int state) {
+        long itemId = beacon.getId();
+
+        if (itemId > 0 && state >= 0 && state <= 2) {
             Beacon item = findActive(itemId);
             if (null != item) {
                 if (state != item.getStorageState()) {
+                    // item changed state
                     item.setStorageState(state);
                     Storage.getInstance().updateItemState(itemId, state);
                 }
             }
-            else if (state == Storage.STATE_ENABLED) {
+            else if (state != Storage.STATE_STOPPED) {
+                // beacon was not in active list, save new state if not stopped
+                beacon.setStorageState(state);
                 Storage.getInstance().updateItemState(itemId, state);
 
-                item = loadItem(itemId);
-                if (null != item) {
-                    getActive().add(item);
-                }
+                getActive().add(beacon);
             }
 
-            if (null != item) {
-                sendStateBroadcast(itemId);
-            }
+            sendStateBroadcast(itemId);
         }
+    }
+
+    public static void enable(Beacon beacon) {
+        setState(beacon, Storage.STATE_ENABLED);
+    }
+
+    public static void pause(Beacon beacon) {
+        setState(beacon, Storage.STATE_PAUSED);
+    }
+
+    public static void stop(Beacon beacon) {
+        setState(beacon, Storage.STATE_STOPPED);
     }
 
     /**
@@ -249,22 +267,21 @@ public class Beacons {
         return Storage.getInstance().getAllItems(true);
     }
 
-    /**
-     * Interface to an UriIO API client, used to register, update, and issue ephemeral URLs.
-     * @return API client, or null if there was no API Key specified at initialize time.
-     */
-    public static ApiClient uriio() {
-        return getInstance().mUriioClient;
+    public static Context getContext() {
+        return getInstance().mAppContext.get();
     }
 
     private static void sendStateBroadcast(long itemId) {
-        LocalBroadcastManager.getInstance(getInstance().mAppContext).sendBroadcast(
-            new Intent(BleService.ACTION_ITEM_STATE).putExtra(BleService.EXTRA_ITEM_ID, itemId));
+        Context context = getInstance().mAppContext.get();
+        if (null != context) {
+            LocalBroadcastManager.getInstance(context).sendBroadcast(
+                    new Intent(BleService.ACTION_ITEM_STATE).putExtra(BleService.EXTRA_ITEM_ID, itemId));
+        }
     }
 
     public static void restartBeacon(Beacon item) {
         if (item.getStatus() == Beacon.STATUS_ADVERTISING) {
-            setState(item.getId(), Storage.STATE_ENABLED);
+            setState(item, Storage.STATE_ENABLED);
         }
     }
 }

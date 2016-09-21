@@ -4,6 +4,7 @@ import android.annotation.TargetApi;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.AdvertiseCallback;
+import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.os.Build;
 
@@ -63,8 +64,24 @@ public class AdvertisersManager {
             }
         }
 
-        //btAdapter.setName("AndroidBLE");   // beware - changes the name at OS level!
+        // fix device name so it fits into the scan record
+        String oldAdapterName = null;
+        int maxNameLen = 8 + 3;  // borrow 3 bytes from TX field
+        AdvertiseData scanResponse = advertiser.getAdvertiseScanResponse();
+        if (null != scanResponse && scanResponse.getIncludeDeviceName()) {
+            oldAdapterName = mBluetoothAdapter.getName();
+            if (null != oldAdapterName && oldAdapterName.getBytes().length > maxNameLen) {
+                // beware - changes the name at OS level!
+                mBluetoothAdapter.setName(Build.MODEL.length() <= maxNameLen ? Build.MODEL : Build.MODEL.substring(0, maxNameLen));
+            }
+            else oldAdapterName = null;
+        }
+
         advertiser.startAdvertising(mBleAdvertiser);
+
+        if (null != oldAdapterName) {
+            mBluetoothAdapter.setName(oldAdapterName);
+        }
         return true;
     }
 

@@ -160,7 +160,6 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
     public void onCharacteristicReadRequest(BluetoothDevice device, int requestId, int offset,
                                             BluetoothGattCharacteristic characteristic) {
         super.onCharacteristicReadRequest(device, requestId, offset, characteristic);
-        Util.log(TAG, "onCharacteristicReadRequest() called with: device = [" + device + "], requestId = [" + requestId + "], offset = [" + offset + "], characteristic = [" + characteristic.getUuid() + "]");
 
         mEddystoneGattService.readCharacteristic(mGattServer, device, requestId, offset, characteristic);
     }
@@ -171,7 +170,6 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
                                              boolean preparedWrite, boolean responseNeeded,
                                              int offset, byte[] value) {
         super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value);
-        Util.log(TAG, "onCharacteristicWriteRequest() called with: device = [" + device + "], requestId = [" + requestId + "], characteristic = [" + characteristic.getUuid() + "], preparedWrite = [" + preparedWrite + "], responseNeeded = [" + responseNeeded + "], offset = [" + offset + "], value = [" + value + "]");
 
         int status = mEddystoneGattService.writeCharacteristic(device, characteristic, value);
 
@@ -184,7 +182,6 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
     @Override
     public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
         super.onConnectionStateChange(device, status, newState);
-        Util.log(TAG, "onConnectionStateChange() called with: device = [" + device + "], status = [" + status + "], newState = [" + newState + "]");
 
         if (newState == BluetoothGatt.STATE_DISCONNECTED) {
             log(device + " has disconnected");

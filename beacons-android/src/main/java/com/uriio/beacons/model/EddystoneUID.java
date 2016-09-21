@@ -22,7 +22,7 @@ public class EddystoneUID extends EddystoneBase {
     public EddystoneUID(long id, byte[] namespaceInstance, String domainHint, byte[] lockKey,
                         @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(id, Beacon.EDDYSTONE_UID, lockKey, mode, txPowerLevel, name);
+        super(id, EDDYSTONE_UID, lockKey, mode, txPowerLevel, name);
 
         mNamespaceInstance = null != namespaceInstance ? namespaceInstance : new byte[16];
         mDomainHint = domainHint;

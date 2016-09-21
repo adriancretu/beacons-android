@@ -9,7 +9,7 @@ import com.uriio.beacons.ble.gatt.EddystoneGattService;
 import com.uriio.beacons.model.Beacon;
 
 /**
-* Advertise as an Eddystone Advertiser
+* Advertise as an Eddystone beacon
 */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class EddystoneAdvertiser extends Advertiser {
@@ -77,7 +77,7 @@ public class EddystoneAdvertiser extends Advertiser {
         if (connectable) {
             mAdvertiseScanResponse = new AdvertiseData.Builder()
                     .setIncludeDeviceName(true)
-                    .setIncludeTxPowerLevel(true)
+                    .setIncludeTxPowerLevel(false)  // allows 3 more bytes for device name
                     .addServiceUuid(new ParcelUuid(EddystoneGattService.UUID_EDDYSTONE_GATT_SERVICE))
                     .build();
         }

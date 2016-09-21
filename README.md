@@ -3,17 +3,16 @@
 - [Description](#description)
 - [Features](#features)
 - [Setup](#setup)
-- [Creating beacons](#creating-beacons)
+- [Create beacons](#creating-beacons)
    * [Eddystone-URL / Eddystone-UID / iBeacon](#eddystone-url-eddystone-uid-ibeacon)
    * [Eddystone-EID](#eddystone-eid)
    * [Eddystone-GATT service](#eddystone-gatt)
-- [Editing beacons](#editing-beacons)
+- [Edit beacons](#editing-beacons)
    * [Change properties](#change-properties)
    * [Deleting a beacon](#deleting-a-beacon)
-   * [Listing the beacons](#listing-the-beacons)
-- [Ephemeral URLs](#ephemeral-urls)
-   * [Register a redirected URL](#registering-a-redirected-long-url)
-   * [Update destination URL](#updating-the-target-url)
+- [List beacons](#listing-the-beacons)
+- [Listen for events](#listening-for-events)
+- [Notification actions](#notification-actions)
     
 #### What this library is:
 
@@ -59,23 +58,19 @@ Examples of supported devices:
 *CAREFUL* - the service will restore active beacons when it (re)starts, so be sure that you either stop or delete a beacon after you no longer need it, If your app crashes, the service may restart and bring the beacon back, so make sure you check what beacons are enabled and stop the ones that you no longer need. Besides freeing resources, every device has a maximum number of concurrent BLE broadcasters (4 on Nexus 6; 8 on Galaxy S7, etc.). When this number is reached, new beacons will fail to start.
 
 ### Setup
-1. Add the library to your app module's **build.gradle**:
+1. Add the library to your app-level **build.gradle**:
 
    ```groovy
    dependencies {
       ...
-      compile 'com.uriio:beacons-android:1.3.4'
+      compile 'com.uriio:beacons-android:1.4.0'
    }
    ```
 
 2. Initialize the library in the `onCreate()` of your Application, or Activity, or Service:
 
    ```java
-   Beacons.initialize(this);  // if you don't need Ephemeral URL support
-   
-   // OR...
-   
-   Beacons.initialize(this, "<YOUR_API_KEY_HERE>");
+   Beacons.initialize(this);
    ```
 
 ## Creating beacons
@@ -213,82 +208,99 @@ Only if needed (e.g. new TX or frequency), the beacon will restart. Saving is do
 
 ### Deleting a beacon
 
+Use this to permanently remove a beacon from the database.
+
 ```java
-Beacons.delete(myBeacon);  // also accepts an ID of a persisted beacon
+Beacons.delete(beacon);
 ```
 
 ### Changing a beacon's state
-A beacon can be in one of three states: Active, Paused, or Stopped. Use ```Beacons.setState()``` to change a beacon's state.
+
+A beacon can be in one of three states: Enabled, Paused, or Stopped.
+
+```java
+Beacons.enable(beacon);   // active beacon, it runs when possible
+Beacons.pause(beacon);    // sets a beacon to paused state, e.g. active but not running
+Beacons.stop(beacon);     // stops and removes a beacon from active list
+```
 
 ## Listing the beacons
+
 All added beacons are saved in a SQLite database local to your app's storage.
 
-Retrieve the list of active and paused beacons by calling `Beacons.getActive()`
+Retrieve the list of *Enabled* and *Paused* beacons by calling `Beacons.getActive()`
 
 Stopped beacons are saved to storage. To iterate over them, use `Beacons.getStopped()` to get a `Cursor`.
 
-While iterating over the cursor you can call `Storage.itemFromCursor()` to get actual items. 
+While iterating over the cursor you can call `Storage.itemFromCursor()` to deserialize into specific beacon instances. 
 
-## Ephemeral URLs
+## Listening for events
 
-An ephemeral URL broadcasts an Eddystone-URL beacon, but it can dynamically change the advertised URL (and even the target URL).
+Because beacon lifecycle depends on a lot of factors (Bluetooth state and drivers mainly), they can start and stop at any time.
 
-This feature requires that you initialized the library with an API key, which you can get by visiting the link below.
+Your front-end app might not even have a running Activity when a beacon restarts due to a Service or Bluetooth restart, for instance.
 
-[Read more about the UriIO API and why it is secure and anti-spoofable.](https://uriio.com)
+To listen for events regarding beacons you have to register a broadcast receiver with a `BleService.ACTION_BEACONS` action filter.
 
-## Registering a redirected long URL
+It's your decision if you would like to use a global receiver that will be called when your Activity is stopped, or
+use dynamic broadcast receivers inside your code. Or both.
 
-This snippet registers a new "long" URL destination and creates an Ephemeral URL beacon for it:
-
-```java
-// the raw key to use for crypto key-exchange; null = use a default strong java crypto RNG
-byte[] temporaryPublicKey = null; // lets the library create a new secure key-pair
-
-String url = 'https://github.com/uriio/beacons-android';
-
-// timeToLive is in seconds; use 0 for an initially non-ephemeral URL
-// if non-zero, the UriIO server will invalidate every beacon-advertised URL after it expires using a 404
-// ofcourse, you can change the TTL at any time after an URL is registered
-Beacons.uriio().registerUrl(url, temporaryPublicKey, new Beacons.OnResultListener<Url>() {
-   @Override
-   public void onResult(Url result, Throwable error) {
-      if (null != result) {
-         // yey, URL registered! We can now start a Ephemeral beacon
-         Beacons.add(new EphemeralURL(result.getId(), result.getToken(),
-               result.getUrl(), timeToLive));
-         // since this is a subclass of EddystoneURL you can adjust its other
-         // properties like TX power, mode, etc.
-      }
-      else {
-         handleError(error);  // registration failed for whatever reason
-      }
-   }
-});
-```
-
-The library will call the specific APIs for issuing periodically new short URLs, and recreate the Eddystone-URL beacon, according to the timeToLive property. If the TTL is zero, the beacon's URL remains the same.
-
-### Updating the target URL
-
-To update the target URL (with or without the need to change other beacon properties), use:
+For dynamic receivers it's recommended to register using the `LocalBroadcastManager` from the *appcompat-v7* library, so
+the receiver can't be called from other applications. Likewise, global receivers declared in your manifest should be marked with `android:exported="false"`
+(which is the default value unless you also declared an intent filter for it).
 
 ```java
-// item is an existing EphemeralURL
-Beacons.uriio().updateUrl(item.getUrlId(), item.getUrlToken(), url, new Beacons.OnResultListener<Url>() {
-   @Override
-   public void onResult(Url result, Throwable error) {
-      if (null != result) {
-         // URL target was updated. Save the new value to the local store.
-         // note: this is just a local state - the server will redirect to the new URL anyway
-         item.edit().setLongUrl(result.getUrl()).apply()
-      }
-      else {
-         showError(error);
-      }
-   }
-});
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if (BleService.ACTION_BEACONS.equals(intent.getAction())) {
+            // some events also contain beacon IDs, or error message / code
+            switch (intent.getIntExtra(BleService.EXTRA_BEACON_EVENT, 0)) {
+                case BleService.EVENT_ADVERTISER_ADDED:
+                    break;
+                case BleService.EVENT_ADVERTISER_STARTED:
+                    break;
+                case BleService.EVENT_ADVERTISER_STOPPED:
+                    break;
+                case BleService.EVENT_ADVERTISER_FAILED:
+                    break;
+                case BleService.EVENT_ADVERTISE_UNSUPPORTED:
+                    break;
+                case BleService.EVENT_SHORTURL_FAILED:
+                    break;
+            }
+        }
+    }
 ```
+
+## Notification actions
+
+When there is at least one beacon running, a persistent notification will be created, to allow the service to run as a *foreground service*
+(less likely to be killed), and also as a heads-up to the user that their device is an active beacon transmitter.
+
+To provide a hook to the action to be taken when the notification is tapped, do the following:
+
+1. Create (or reuse one) a BroadcastReceiver and add it to your *AndroidManifest.xml*
+2. Update *AndroidManifest.xml* with a `meta-data` that points to this receiver, like below:
+
+    ```xml
+       <!-- Replace with your receiver. Make sure it remains non-exported -->
+       <receiver android:name=".MyReceiver" android:exported="false"/>
+       
+       <!-- REPLACE <my-package-name> and MyReceiverwith actual (sub)package and class name -->
+       <meta-data android:name="com.uriio.receiver" android:value="<my-package-name>.MyReceiver" />
+    ```
+3. Respond to the user tapping the notification content, in your receiver:
+    ```java
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (BleService.ACTION_NOTIFICATION_CONTENT.equals(intent.getAction())) {
+                // this example starts your own Activity
+                context.startActivity(new Intent(context, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .putExtra(MainActivity.EXTRA_BEACONS_NOTIFICATION, true));
+            }
+        }
+    ```
 
 ## Building the library
 
@@ -301,3 +313,4 @@ Clone the repo and build the library:
 ```
 
 For a painless process, make sure your Android SDK and environment are correctly set-up.
+

@@ -1,5 +1,6 @@
 package com.uriio.beacons.eid;
 
+import android.annotation.SuppressLint;
 import android.support.annotation.NonNull;
 
 import com.uriio.beacons.Util;
@@ -39,6 +40,7 @@ public class EIDUtils {
     public static byte[] computeEID(byte[] key, int timeCounter, byte rotationExponent) throws GeneralSecurityException {
 //        String transformation = "AES/CBC/PKCS5Padding";
         String transformation = "AES/ECB/NoPadding";
+        @SuppressLint("GetInstance")  // spec says it has to be ECB, ignore lint warning
         Cipher aes = Cipher.getInstance(transformation);
         aes.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, 0, 16, "AES"));
 

@@ -16,22 +16,5 @@
 #   public *;
 #}
 
-#Retrofit
--keep class retrofit2.** { *; }
--keepattributes Signature
--keepattributes Exceptions
-
--dontwarn okio.**
--dontwarn retrofit2.**
-
--keepclasseswithmembers class * {
-    @retrofit2.http.* <methods>;
-}
-
-# Don't remove fields marked as GSON keys
--keepclassmembers class * {
-  @com.google.gson.annotations.SerializedName <fields>;
-}
-
 #Curve25519 loads providers by class name...
 -keep class * implements org.whispersystems.curve25519.Curve25519Provider

@@ -2,12 +2,10 @@ package com.uriio.beacons.model;
 
 import com.uriio.beacons.Beacons;
 import com.uriio.beacons.BleService;
+import com.uriio.beacons.BuildConfig;
+import com.uriio.beacons.Callback;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.Util;
-import com.uriio.beacons.api.ShortUrl;
-import com.uriio.beacons.api.ShortUrls;
-
-import java.util.Date;
 
 import static com.uriio.beacons.BleService.EVENT_SHORTURL_FAILED;
 
@@ -126,28 +124,36 @@ public class EphemeralURL extends EddystoneURL {
         return Storage.KIND_URIIO;
     }
 
+    public interface ShortURLIssuer {
+        void issueBeaconUrl(EphemeralURL beacon, Callback<Boolean> callback);
+    }
+
+    private static ShortURLIssuer _issuerImpl = null;
+
+    public static void setIssuer(ShortURLIssuer issuer) {
+        _issuerImpl = issuer;
+    }
+
     @Override
     public void onAdvertiseEnabled(final BleService service) {
         if (null == getURL() || getMillisecondsUntilExpires() < 7 * 1000) {
-            Util.log(TAG, "Updating short url for item " + getId());
-            Beacons.uriio().issueShortUrls(mUrlId, mUrlToken, mTimeToLive, 1, new Beacons.OnResultListener<ShortUrls>() {
-                @Override
-                public void onResult(ShortUrls result, Throwable error) {
-                    if (null != result) {
-                        ShortUrl shortUrl = result.getItems()[0];
-                        Date expireDate = shortUrl.getExpire();
-                        long expireTime = null == expireDate ? 0 : expireDate.getTime();
-
-                        edit()
-                                .setShortUrl(shortUrl.getUrl(), expireTime)
-                                .apply();
-                        service.startItemAdvertising(EphemeralURL.this);
-                    } else {
-                        setStatus(Beacon.STATUS_UPDATE_FAILED);
-                        service.broadcastError(EVENT_SHORTURL_FAILED, error);
+            if (null == _issuerImpl) {
+                service.broadcastError(this, EVENT_SHORTURL_FAILED, "No URL provider!");
+            }
+            else {
+                if (BuildConfig.DEBUG) Util.log(TAG, "Updating beacon URL for beacon " + getId());
+                _issuerImpl.issueBeaconUrl(this, new Callback<Boolean>() {
+                    @Override
+                    public void onResult(Boolean result, Throwable error) {
+                        if (result) {   // true or false, never null
+                            service.startItemAdvertising(EphemeralURL.this);
+                        }
+                        else if (null != error) {
+                            service.broadcastError(EphemeralURL.this, EVENT_SHORTURL_FAILED, error.getMessage());
+                        }
                     }
-                }
-            });
+                });
+            }
         }
         else {
             service.startItemAdvertising(this);

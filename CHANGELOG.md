@@ -1,4 +1,11 @@
-### 1.3.4
+### 1.4.0
+* BLE service improvements, self stopping, foreground service
+* Imposed running beacons notification, with action buttons
+* Fixed "advertise failed" when BT adapter name is longer than 8 characters
+* Moved UriIO aphemeral URL beacons feature to separate library
+* Improved API
+
+### 1.3.4 (September 18, 2016)
 * Simplified Eddystone-GATT significantly:
     - a single, optional beacon can be initially provided to be used as both connectable and as configuration target
     - automatically save the (new) configured beacon after configuration ends
