@@ -19,6 +19,7 @@ android {
             task ('generateReleaseJavadoc', type: Javadoc) {
                 title 'UriIO Android library reference'
                 description 'Library documentation'
+                failOnError false
                 source sourceSets.main.java.srcDirs
                 classpath += files(android.getBootClasspath())
                 options {
