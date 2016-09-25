@@ -91,8 +91,10 @@ public class Beacons {
             }
             cursor.close();
 
-            // (re)start the BLE service
-            context.startService(new Intent(context, BleService.class));
+            if (getActive().size() > 0) {
+                // (re)start the BLE service
+                context.startService(new Intent(context, BleService.class));
+            }
         }
     }
 
@@ -118,11 +120,6 @@ public class Beacons {
         }
     }
 
-    static void onBleServiceDestroyed() {
-        // time to LET IT GO
-        _instance = null;
-    }
-
     public static<T extends Beacon> T add(T beacon/*, boolean persistent*/) {
         // don't add an already persisted beacon
         if (beacon.getId() > 0) return beacon;
@@ -143,7 +140,6 @@ public class Beacons {
             }
         }
 
-        getInstance().mActiveItems.add(beacon);
         enable(beacon);
 
         return beacon;
@@ -196,6 +192,10 @@ public class Beacons {
     }
 
     public static void enable(Beacon beacon) {
+        if (getActive().size() == 0) {
+            Context context = getInstance().mAppContext.get();
+            context.startService(new Intent(context, BleService.class));
+        }
         setState(beacon, Storage.STATE_ENABLED);
     }
 

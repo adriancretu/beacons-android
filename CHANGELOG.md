@@ -1,4 +1,8 @@
-### 1.4.0
+### 1.4.1 (September 24, 2016)
+* BLE service started when first active beacon started
+* Don't clear API instance when service stops, to avoid crashes during context lifecycle
+
+### 1.4.0 (September 20, 2016)
 * BLE service improvements, self stopping, foreground service
 * Imposed running beacons notification, with action buttons
 * Fixed "advertise failed" when BT adapter name is longer than 8 characters

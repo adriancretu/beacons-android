@@ -61,7 +61,7 @@ Examples of supported devices:
    ```groovy
    dependencies {
       ...
-      compile 'com.uriio:beacons-android:1.4.0'
+      compile 'com.uriio:beacons-android:1.4.1'
    }
    ```
 

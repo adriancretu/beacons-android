@@ -157,8 +157,6 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
             mStarted = false;
         }
 
-        Beacons.onBleServiceDestroyed();
-
         super.onDestroy();
     }
     //endregion
