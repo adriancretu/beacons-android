@@ -25,11 +25,11 @@ public class EddystoneEID extends EddystoneBase {
      * @param txPowerLevel        BLE power level
      * @param name                Optional beacon name
      */
-    public EddystoneEID(long id, byte[] identityKey, byte rotationExponent, int timeOffset,
+    public EddystoneEID(long storageId, byte[] identityKey, byte rotationExponent, int timeOffset,
                         byte[] lockKey,
                         @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(id, EDDYSTONE_EID, lockKey, mode, txPowerLevel, name);
+        super(storageId, EDDYSTONE_EID, lockKey, mode, txPowerLevel, name);
         init(identityKey, rotationExponent, timeOffset);
     }
 
@@ -86,7 +86,7 @@ public class EddystoneEID extends EddystoneBase {
     }
 
     @Override
-    public EddystoneAdvertiser createBeacon(AdvertisersManager advertisersManager) {
+    public EddystoneAdvertiser createAdvertiser(AdvertisersManager advertisersManager) {
         // add time offset to current time
         int timeCounter = getEidClock();
         byte[] data;
@@ -103,7 +103,7 @@ public class EddystoneEID extends EddystoneBase {
 
         EddystoneAdvertiser beacon = new EddystoneAdvertiser(data, 0, 8, advertisersManager,
                 getAdvertiseMode(), getTxPowerLevel(), isConnectable(), getFlags());
-        setBeacon(beacon);
+        setAdvertiser(beacon);
 
         return beacon;
     }

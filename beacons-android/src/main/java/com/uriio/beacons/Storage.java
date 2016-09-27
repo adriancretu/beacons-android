@@ -21,10 +21,6 @@ import java.nio.ByteBuffer;
  * Database manager.
  */
 public class Storage extends SQLiteOpenHelper {
-    public static final int STATE_ENABLED  = 0;
-    public static final int STATE_PAUSED   = 1;
-    public static final int STATE_STOPPED  = 2;
-
     public static final int KIND_URIIO     = 1;
     public static final int KIND_EDDYSTONE = 2;
     public static final int KIND_IBEACON   = 3;
@@ -50,7 +46,7 @@ public class Storage extends SQLiteOpenHelper {
         super(context, dbName, null, DATABASE_SCHEMA_VERSION);
     }
 
-    public static void init(Context context, String dbName) {
+    static void init(Context context, String dbName) {
         _instance = new Storage(context, dbName);
     }
 
@@ -254,10 +250,11 @@ public class Storage extends SQLiteOpenHelper {
                     item.getTxPowerLevel(), item.getFlags(), item.getName());
             if (rowid > 0) {
                 stmt.bindLong(1, rowid);
-                stmt.executeInsert();
+                if (rowid != stmt.executeInsert()) return 0;
+
                 db.setTransactionSuccessful();
 
-                item.setId(rowid);
+                item.setStorageId(rowid);
             }
         }
         finally {
@@ -283,12 +280,15 @@ public class Storage extends SQLiteOpenHelper {
         }
 
         mUpdateShortUrlStmt.bindLong(2, item.getActualExpireTime());
-        mUpdateShortUrlStmt.bindLong(3, item.getId());
+        mUpdateShortUrlStmt.bindLong(3, item.getSavedId());
 
         mUpdateShortUrlStmt.executeUpdateDelete();
     }
 
-    public void updateItemState(long itemId, int state) {
+    public void updateBeaconState(Beacon beacon, int state) {
+        long itemId = beacon.getSavedId();
+        if (itemId <= 0) return;
+
         SQLiteDatabase db = getWritableDatabase();
 
         if (null == mUpdateStateStmt) {
@@ -381,14 +381,14 @@ public class Storage extends SQLiteOpenHelper {
         }
 
         if (null != item) {
-            item.setStorageState(cursor.getInt(4));
+            item.setActiveState(cursor.getInt(4));
         }
 
         return item;
     }
 
     public void updateIBeaconItem(iBeacon item) {
-        long id = item.getId();
+        long id = item.getSavedId();
 
         SQLiteDatabase db = getWritableDatabase();
 
@@ -420,13 +420,13 @@ public class Storage extends SQLiteOpenHelper {
             stmtUpdateEddystone.bindString(2, domain);
         }
 
-        stmtUpdateEddystone.bindLong(3, item.getId());
+        stmtUpdateEddystone.bindLong(3, item.getSavedId());
 
         stmtUpdateEddystone.executeUpdateDelete();
     }
 
     public void updateUriioItem(EphemeralURL item) {
-        long id = item.getId();
+        long id = item.getSavedId();
 
         SQLiteDatabase db = getWritableDatabase();
 
@@ -455,21 +455,21 @@ public class Storage extends SQLiteOpenHelper {
         if (null == name) stmt.bindNull(4);
         else stmt.bindString(4, name);
 
-        stmt.bindLong(5, item.getId());
+        stmt.bindLong(5, item.getSavedId());
 
         stmt.executeUpdateDelete();
     }
 
-    public void save(Beacon item) {
-        switch (item.getKind()) {
+    public void saveExisting(Beacon beacon) {
+        switch (beacon.getKind()) {
             case KIND_EDDYSTONE:
-                updateEddystoneItem((EddystoneBase) item);
+                updateEddystoneItem((EddystoneBase) beacon);
                 break;
             case KIND_IBEACON:
-                updateIBeaconItem((iBeacon) item);
+                updateIBeaconItem((iBeacon) beacon);
                 break;
             case KIND_URIIO:
-                updateUriioItem((EphemeralURL) item);
+                updateUriioItem((EphemeralURL) beacon);
                 break;
         }
     }

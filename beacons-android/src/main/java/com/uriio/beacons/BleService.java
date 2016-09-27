@@ -19,13 +19,16 @@ import android.os.Build;
 import android.os.IBinder;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
+import android.text.Html;
+import android.text.SpannableStringBuilder;
 import android.util.Log;
 
 import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.model.Beacon;
 import com.uriio.beacons.model.EddystoneURL;
-import com.uriio.beacons.model.EphemeralURL;
+
+import java.util.UUID;
 
 /**
  * Advertiser service, that persists and restarts in case of a crash by restoring its previous state.
@@ -42,11 +45,11 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     public static final String ACTION_NOTIFICATION_CONTENT = BuildConfig.APPLICATION_ID + ".ACTION_NOTIF_CONTENT";
 
     /** Item state changed*/
-    static final String ACTION_ITEM_STATE = BuildConfig.APPLICATION_ID + ".ACTION_ITEM_STATE";
+    public static final String ACTION_ITEM_STATE = BuildConfig.APPLICATION_ID + ".ACTION_ITEM_STATE";
 
-    static final String ACTION_ALARM = BuildConfig.APPLICATION_ID + ".ACTION_ALARM";
+    public static final String ACTION_ALARM     = BuildConfig.APPLICATION_ID + ".ACTION_ALARM";
     static final String ACTION_PAUSE_ADVERTISER = BuildConfig.APPLICATION_ID + ".ACTION_PAUSE_ADVERTISER";
-    static final String ACTION_STOP_ADVERTISER = BuildConfig.APPLICATION_ID + ".ACTION_STOP_ADVERTISER";
+    static final String ACTION_STOP_ADVERTISER  = BuildConfig.APPLICATION_ID + ".ACTION_STOP_ADVERTISER";
 
     public static final int EVENT_ADVERTISER_ADDED      = 1;
     public static final int EVENT_ADVERTISER_STARTED    = 2;
@@ -57,11 +60,14 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     // TODO - separate this from the bunch...
     public static final int EVENT_SHORTURL_FAILED       = 6;
 
-    /** Intent extras */
-    public static final String EXTRA_ITEM_ID      = "id";
-    public static final String EXTRA_BEACON_EVENT = "type";
-    public static final String EXTRA_ERROR        = "error";
-    public static final String EXTRA_ERROR_CODE   = "code";
+    /** Intent extra - beacon UUID */
+    public static final String EXTRA_ITEM_ID         = "id";
+    /** Intent extra - beacon storage ID */
+    public static final String EXTRA_ITEM_STORAGE_ID = "dbid";
+
+    public static final String EXTRA_BEACON_EVENT    = "type";
+    public static final String EXTRA_ERROR           = "error";
+    public static final String EXTRA_ERROR_CODE      = "code";
 
     public class LocalBinder extends Binder {
         public BleService getUriioService() {
@@ -119,12 +125,13 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         if (null != intent) {
             Receiver.completeWakefulIntent(intent);
 
-            long itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0);
-            if (0 != itemId) {
-                Beacon item = Beacons.findActive(itemId);
-                if (null != item) {
-                    item.onAdvertiseEnabled(this);
-                }
+            Beacon beacon = Beacons.findActive(intent.getLongExtra(EXTRA_ITEM_STORAGE_ID, 0));
+
+            // unsaved beacon, try finding by UUID
+            if (null == beacon) beacon = Beacons.findActive((UUID) intent.getSerializableExtra(EXTRA_ITEM_ID));
+
+            if (null != beacon) {
+                beacon.onAdvertiseEnabled(this);
             }
         }
 
@@ -148,14 +155,16 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
                 mAdvertisersManager = null;
             }
 
-            for (Beacon activeItem : Beacons.getActive()) {
-                mAlarmManager.cancel(getItemRestartPendingIntent(activeItem));
+            for (Beacon beacon : Beacons.getActive()) {
+                mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
             }
             Beacons.getActive().clear();
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
 
             mStarted = false;
         }
+
+        Beacons.onBleServiceDestroyed();
 
         super.onDestroy();
     }
@@ -165,12 +174,12 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
 //            log("Bluetooth event state=" + state);
         if (BluetoothAdapter.STATE_TURNING_OFF == state) {
-            for (Beacon activeItem : Beacons.getActive()) {
+            for (Beacon beacon : Beacons.getActive()) {
                 // cancel beacon updater alarm
-                mAlarmManager.cancel(getItemRestartPendingIntent(activeItem));
+                mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
 
-                activeItem.setStatus(Beacon.STATUS_NO_BLUETOOTH);
-                Advertiser advertiser = activeItem.getAdvertiser();
+                beacon.setAdvertiseState(Beacon.ADVERTISE_NO_BLUETOOTH);
+                Advertiser advertiser = beacon.getAdvertiser();
                 if (null != advertiser) {
                     advertiser.setStoppedState();
                 }
@@ -182,42 +191,43 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
             mAdvertisersManager.onBluetoothOff();
             broadcastBeaconEvent(EVENT_ADVERTISER_STOPPED, null);
         } else if (BluetoothAdapter.STATE_ON == state) {
-            for (Beacon activeItem : Beacons.getActive()) {
-                if (activeItem.getStorageState() == Storage.STATE_ENABLED) {
-                    activeItem.onAdvertiseEnabled(this);
+            for (Beacon beacon : Beacons.getActive()) {
+                if (beacon.getActiveState() == Beacon.ACTIVE_STATE_ENABLED) {
+                    beacon.onAdvertiseEnabled(this);
                 } else {
-                    // beacon was not enabled, but in the active list, aka PAUSED
-                    activeItem.setStatus(Beacon.STATUS_ADVERTISE_PAUSED);
+                    // beacon was active but not enabled, aka PAUSED
+                    beacon.setAdvertiseState(Beacon.ADVERTISE_STOPPED);
                 }
             }
         }
     }
 
     private void handleItemState(Intent intent) {
-        long itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0);
-        if (0 != itemId) {
-//            Util.log(TAG, "Received intent for item " + itemId);
-            Beacon item = Beacons.findActive(itemId);
+        Beacon beacon = Beacons.findActive(intent.getLongExtra(EXTRA_ITEM_STORAGE_ID, 0));
 
-            if (null != item) {
-                switch (item.getStorageState()) {
-                    case Storage.STATE_ENABLED:
-                        item.onAdvertiseEnabled(this);
-                        broadcastBeaconEvent(EVENT_ADVERTISER_ADDED, item);
-                        break;
-                    case Storage.STATE_PAUSED:
-                        stopItem(item, false);
-                        break;
-                    case Storage.STATE_STOPPED:
-                        stopItem(item, true);
-                        break;
-                }
+        // unsaved beacon, try finding by UUID
+        if (null == beacon) beacon = Beacons.findActive((UUID) intent.getSerializableExtra(EXTRA_ITEM_ID));
+
+        if (null != beacon) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Received itemState intent for " + beacon.getUUID());
+
+            switch (beacon.getActiveState()) {
+                case Beacon.ACTIVE_STATE_ENABLED:
+                    beacon.onAdvertiseEnabled(this);
+                    broadcastBeaconEvent(EVENT_ADVERTISER_ADDED, beacon);
+                    break;
+                case Beacon.ACTIVE_STATE_PAUSED:
+                    stopBeacon(beacon, false);
+                    break;
+                case Beacon.ACTIVE_STATE_STOPPED:
+                    stopBeacon(beacon, true);
+                    break;
             }
         }
     }
 
     private void initializeService() {
-        Beacons.reinitialize(this);
+        Beacons.initialize(this);
 
         mAlarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
 
@@ -239,7 +249,7 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     private void restoreSavedState() {
         // restore advertisers
         for (Beacon item : Beacons.getActive()) {
-            if (item.getStorageState() == Storage.STATE_ENABLED) {
+            if (item.getActiveState() == Beacon.ACTIVE_STATE_ENABLED) {
                 item.onAdvertiseEnabled(this);
             }
         }
@@ -247,10 +257,10 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
 
     /**
      * Start or restart the advertising of an item's BLE beacon.
-     * @param item    The item to (re)start.
+     * @param beacon    The item to (re)start.
      * @return True if the beacon was started, false otherwise.
      */
-    public boolean startItemAdvertising(Beacon item) {
+    public boolean startBeaconAdvertiser(Beacon beacon) {
         if (null == mAdvertisersManager) {
             return false;
         }
@@ -259,13 +269,13 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
             return false;
         }
 
-        // stop any currently existing advertiser associated to the item
-        Advertiser existingAdvertiser = item.getAdvertiser();
+        // stop current advertiser for this beacon
+        Advertiser existingAdvertiser = beacon.getAdvertiser();
         if (null != existingAdvertiser) {
             mAdvertisersManager.enableAdvertiser(existingAdvertiser, false);
         }
 
-        Advertiser advertiser = item.createBeacon(mAdvertisersManager);
+        Advertiser advertiser = beacon.createAdvertiser(mAdvertisersManager);
 
         return null != advertiser && mAdvertisersManager.startAdvertiser(advertiser);
     }
@@ -293,13 +303,14 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     private Intent makeBeaconEventIntent(int event, Beacon beacon) {
         Intent intent = new Intent(ACTION_BEACONS).putExtra(EXTRA_BEACON_EVENT, event);
         if (null != beacon) {
-            intent.putExtra(EXTRA_ITEM_ID, beacon.getId());
+            intent.putExtra(EXTRA_ITEM_ID, beacon.getUUID());
+            intent.putExtra(EXTRA_ITEM_STORAGE_ID, beacon.getSavedId());
             intent.putExtra("kind", beacon.getKind());
         }
         return intent;
     }
 
-    private Beacon findActiveItem(Advertiser advertiser) {
+    private Beacon findActiveBeacon(Advertiser advertiser) {
         for (Beacon item : Beacons.getActive()) {
             if (item.getAdvertiser() == advertiser) return item;
         }
@@ -309,21 +320,19 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     //region AdvertisersManager.BLEListener
     @Override
     public void onBLEAdvertiseStarted(Advertiser advertiser) {
-        Beacon item = findActiveItem(advertiser);
-        if (null != item) {
-            item.setStatus(Beacon.STATUS_ADVERTISING);
+        Beacon beacon = findActiveBeacon(advertiser);
+        if (null != beacon) {
+            beacon.setAdvertiseState(Beacon.ADVERTISE_RUNNING);
 
-            long scheduledRefreshTime = item.getScheduledRefreshTime();
+            long scheduledRefreshTime = beacon.getScheduledRefreshTime();
 
             if (scheduledRefreshTime > 0) {
-                PendingIntent pendingIntent = getItemRestartPendingIntent(item);
-
                 // schedule alarm for next onAdvertiseEnabled
-                if(BuildConfig.DEBUG) Log.d(TAG, "Scheduling alarm for " + item.getId() + " in " + scheduledRefreshTime);
-                scheduleRTCAlarm(scheduledRefreshTime, pendingIntent);
+                if(BuildConfig.DEBUG) Log.d(TAG, "Scheduling alarm for " + beacon.getUUID() + " in " + scheduledRefreshTime);
+                scheduleRTCAlarm(scheduledRefreshTime, beacon.getAlarmPendingIntent(this));
             }
 
-            broadcastBeaconEvent(EVENT_ADVERTISER_STARTED, item);
+            broadcastBeaconEvent(EVENT_ADVERTISER_STARTED, beacon);
 
             updateForegroundNotification(true);
         }
@@ -334,17 +343,18 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         int totalRunning = fillInboxStyleNotification(inboxStyle);
 
         if (totalRunning > 0) {
-            String contentText = totalRunning + " beacons are broadcasting";
+            String contentText = totalRunning + " beacons broadcasted by app. Expand for details.";
             inboxStyle.setSummaryText(totalRunning + " beacons running");
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
                     .setContentIntent(PendingIntent.getBroadcast(this, 0,
                             new Intent(ACTION_NOTIFICATION_CONTENT).setComponent(mAppReceiver), 0))
                     .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                    .setContentTitle("Beacon transmission active")
+                    .setContentTitle("Beacons active")
                     .setContentText(contentText)
                     .setStyle(inboxStyle)
                     .setOngoing(true)
+                    .setPriority(NotificationCompat.PRIORITY_MIN)
                     .setColor(0xff800000)
                     .setNumber(totalRunning);
 
@@ -353,7 +363,7 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
             builder.addAction(0, "Stop all", PendingIntent.getBroadcast(this, 0,
                     new Intent(ACTION_STOP_ADVERTISER, null, this, Receiver.class), PendingIntent.FLAG_ONE_SHOT));
 
-            if (newAdvertiserStarted && totalRunning == 1) {
+            if (newAdvertiserStarted && 1 == totalRunning) {
                 startForeground(NOTIFICATION_ID, builder.build());
             }
             else {
@@ -366,17 +376,12 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         }
     }
 
-    private CharSequence getNotificationContentText(Beacon item) {
-        if (null != item.getName() && item.getName().length() > 0) return item.getName();
-        return "[no name]";
-    }
-
     @Override
     public void onBLEAdvertiseFailed(Advertiser advertiser, int errorCode) {
-        Beacon item = findActiveItem(advertiser);
-        if (null != item) {
-            item.setStatus(Beacon.STATUS_ADVERTISE_FAILED);
-            broadcastError(item, EVENT_ADVERTISER_FAILED, errorCode);
+        Beacon beacon = findActiveBeacon(advertiser);
+        if (null != beacon) {
+            beacon.setError("Failure " + errorCode);
+            broadcastError(beacon, EVENT_ADVERTISER_FAILED, errorCode);
         }
     }
 
@@ -386,23 +391,30 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     }
     //endregion
 
-    private static final String[] _txPowers = {"Ultra-low", "Low", "Medium", "High"};
-    private static final String[] _advModes = {"Low-power", "Balanced", "Low latency"};
+    private static final String[] _txPowers = {
+            "<font color=\"#008000\">ULP</font>",
+            "<font color=\"#000080\">Low</font>",
+            "<font color=\"#ff8040\">Medium</font>",
+            "<font color=\"#ff0000\"><b>High</b></font>"
+    };
+    private static final String[] _advModes = {
+            "<font color=\"#008000\">1 Hz</font>",
+            "<font color=\"#000080\">4 Hz</font>",
+            "<font color=\"#ff0000\"><b>10 Hz</b></font>"
+    };
 
     private int fillInboxStyleNotification(NotificationCompat.InboxStyle inboxStyle) {
         int totalRunning = 0;
         for (Beacon item : Beacons.getActive()) {
-            if (item.getStatus() != Beacon.STATUS_ADVERTISING) continue;
+            if (item.getAdvertiseState() != Beacon.ADVERTISE_RUNNING) continue;
 
             ++totalRunning;
 
-            StringBuilder builder = new StringBuilder();
-
-            if (builder.length() > 0) builder.append("\n");
-            builder.append(getNotificationContentText(item)).append("\n");
+            SpannableStringBuilder builder = new SpannableStringBuilder();
 
             switch (item.getType()) {
                 case Beacon.EDDYSTONE_URL:
+                case Beacon.EPHEMERAL_URL:
                     builder.append(((EddystoneURL) item).getURL());
                     break;
                 case Beacon.EDDYSTONE_UID:
@@ -414,12 +426,9 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
                 case Beacon.IBEACON:
                     builder.append("iBeacon");
                     break;
-                case Beacon.EPHEMERAL_URL:
-                    builder.append(((EphemeralURL) item).getLongUrl());
-                    break;
             }
-            builder.append(" ").append(_txPowers[item.getTxPowerLevel()])
-                    .append(",  ").append(_advModes[item.getAdvertiseMode()]);
+            builder.append(" ").append(Html.fromHtml(_txPowers[item.getTxPowerLevel()]))
+                    .append(" ").append(Html.fromHtml(_advModes[item.getAdvertiseMode()]));
 
             inboxStyle.addLine(builder);
         }
@@ -427,23 +436,24 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         return totalRunning;
     }
 
-    private void stopItem(Beacon item, boolean remove) {
-        Advertiser advertiser = item.getAdvertiser();
+    private void stopBeacon(Beacon beacon, boolean remove) {
+        Advertiser advertiser = beacon.getAdvertiser();
 
+        // stop the advertising and cancel any pending alarm
         if (null != advertiser && advertiser.getStatus() == Advertiser.STATUS_RUNNING) {
             mAdvertisersManager.enableAdvertiser(advertiser, false);
         }
-        mAlarmManager.cancel(getItemRestartPendingIntent(item));
+        mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
 
-        item.setStatus(remove ? Beacon.STATUS_STOPPED : Beacon.STATUS_ADVERTISE_PAUSED);
+        beacon.setAdvertiseState(Beacon.ADVERTISE_STOPPED);
         if (remove) {
-            Beacons.getActive().remove(item);
+            Beacons.getActive().remove(beacon);
             if (0 == Beacons.getActive().size()) {
 //                Toast.makeText(this, "BLE service stopped, no beacons are enabled.", Toast.LENGTH_LONG).show();
                 stopSelf();
             }
         }
-        broadcastBeaconEvent(EVENT_ADVERTISER_STOPPED, item);
+        broadcastBeaconEvent(EVENT_ADVERTISER_STOPPED, beacon);
 
         updateForegroundNotification(false);
     }
@@ -452,13 +462,6 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         mAlarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation);
     }
 
-    private PendingIntent getItemRestartPendingIntent(Beacon item) {
-        Intent intent = new Intent(ACTION_ALARM, null, this, Receiver.class);
-        intent.putExtra(EXTRA_ITEM_ID, item.getId());
-
-        // use the item id as the private request code, or else the Intent is "identical" for all items and is reused!
-        return PendingIntent.getBroadcast(this, (int) item.getId(), intent, 0);
-    }
 
     private String getAppReceiver() {
         ApplicationInfo appInfo;

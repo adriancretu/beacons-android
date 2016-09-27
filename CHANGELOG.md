@@ -1,3 +1,9 @@
+### 1.4.2 (September 27, 2016)
+* Beacon persistence is now optional
+* API changes:
+    - `Beacons.enable/pause/stop/delete` is now simply `beacon.start()/pause()/stop()/delete()`
+    - `Beacons.add(beacon)` is now `beacon.save()` (save and start the beacon)
+
 ### 1.4.1 (September 24, 2016)
 * BLE service started when first active beacon started
 * Don't clear API instance when service stops, to avoid crashes during context lifecycle

@@ -1,6 +1,5 @@
 package com.uriio.beacons.model;
 
-import com.uriio.beacons.Beacons;
 import com.uriio.beacons.BleService;
 import com.uriio.beacons.BuildConfig;
 import com.uriio.beacons.Callback;
@@ -141,12 +140,12 @@ public class EphemeralURL extends EddystoneURL {
                 service.broadcastError(this, EVENT_SHORTURL_FAILED, "No URL provider!");
             }
             else {
-                if (BuildConfig.DEBUG) Util.log(TAG, "Updating beacon URL for beacon " + getId());
+                if (BuildConfig.DEBUG) Util.log(TAG, "Updating beacon URL for beacon " + getUUID());
                 _issuerImpl.issueBeaconUrl(this, new Callback<Boolean>() {
                     @Override
                     public void onResult(Boolean result, Throwable error) {
                         if (result) {   // true or false, never null
-                            service.startItemAdvertising(EphemeralURL.this);
+                            service.startBeaconAdvertiser(EphemeralURL.this);
                         }
                         else if (null != error) {
                             service.broadcastError(EphemeralURL.this, EVENT_SHORTURL_FAILED, error.getMessage());
@@ -156,7 +155,7 @@ public class EphemeralURL extends EddystoneURL {
             }
         }
         else {
-            service.startItemAdvertising(this);
+            service.startBeaconAdvertiser(this);
         }
     }
 
@@ -202,7 +201,7 @@ public class EphemeralURL extends EddystoneURL {
         @Override
         public void apply() {
             if (mShortUrlChanged) {
-                Beacons.getStorage().updateUriioItemShortUrl(EphemeralURL.this);
+                Storage.getInstance().updateUriioItemShortUrl(EphemeralURL.this);
             }
 
             super.apply();

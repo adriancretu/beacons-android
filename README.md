@@ -5,14 +5,15 @@ This library is used by the [Beacon Toy](https://play.google.com/store/apps/deta
 - [Description](#description)
 - [Features](#features)
 - [Setup](#setup)
-- [Create beacons](#creating-beacons)
+- [Create a beacon](#creating-beacons)
    * [Eddystone-URL / Eddystone-UID / iBeacon](#eddystone-url-eddystone-uid-ibeacon)
    * [Eddystone-EID](#eddystone-eid)
    * [Eddystone-GATT service](#eddystone-gatt)
-- [Edit beacons](#editing-beacons)
-   * [Change properties](#change-properties)
-   * [Deleting a beacon](#deleting-a-beacon)
-- [List beacons](#listing-the-beacons)
+- [Start, pause, or stop a beacon](#changing-beacon-state)
+- [Save a beacon](#saving-beacons)
+- [Edit a beacon](#editing-beacons)
+- [Delete a beacon](#deleting-a-beacon)
+- [List active or stopped beacons](#listing-the-beacons)
 - [Listen for events](#listening-for-events)
 - [Notification actions](#notification-actions)
     
@@ -56,16 +57,16 @@ Examples of supported devices:
 *CAREFUL* - the service will restore active beacons when it (re)starts, so be sure that you either stop or delete a beacon after you no longer need it, If your app crashes, the service may restart and bring the beacon back, so make sure you check what beacons are enabled and stop the ones that you no longer need. Besides freeing resources, every device has a maximum number of concurrent BLE broadcasters (4 on Nexus 6; 8 on Galaxy S7, etc.). When this number is reached, new beacons will fail to start.
 
 ### Setup
-1. Add the library to your app-level **build.gradle**:
+1. Add the library to your app module's **build.gradle**.
 
    ```groovy
    dependencies {
       ...
-      compile 'com.uriio:beacons-android:1.4.1'
+      compile 'com.uriio:beacons-android:1.4.2'
    }
    ```
 
-2. Initialize the library in the `onCreate()` of your Application, or Activity, or Service:
+2. Initialize the library. Usually you would do this when `onCreate()` is called in either your Application, Activity, or Service.
 
    ```java
    Beacons.initialize(this);
@@ -73,22 +74,20 @@ Examples of supported devices:
 
 ## Creating beacons
 
+You can create and start new beacons with one-liners.
+
 ### Eddystone-URL, Eddystone-UID, iBeacon
 
-You can create, start, and even modify new beacons with one-liners:
-
 ```java
-// saves a new  Eddystone-URL beacon and starts it ASAP!
-Beacons.add("https://github.com");
+// starts an Eddystone-URL beacon ASAP
+new EddystoneURL("https://github.com").start();
 
-// pass in a custom Beacon
-Beacons.add(new iBeacon(uuid, major, minor));
+// a custom Beacon
+new iBeacon(uuid, major, minor).start();
 
-// provide a more sophisticated beacon
-Beacons.add(new EddystoneUID(myUID, AdvertiseSettings.ADVERTISE_MODE_BALANCED, AdvertiseSettings.ADVERTISE_TX_POWER_LOW));
-
-// add a beacon and change its name
-Beacons.add("https://github.com").edit().setName("an awesome beacon").apply();
+// a more sophisticated beacon
+new EddystoneUID(myUID, AdvertiseSettings.ADVERTISE_MODE_BALANCED, AdvertiseSettings.ADVERTISE_TX_POWER_LOW)
+   .start();
 ```
 
 After adding a beacon, it will begin to advertise immediately if Bluetooth is on (or when it gets enabled).
@@ -116,26 +115,35 @@ new EID beacon. That will take care of all the ugly details.
 fakeRegistration = EIDUtils.register(new LocalEIDResolver(), mTemporaryKeyPair.getPublicKey(),
       mTemporaryKeyPair.getPrivateKey(), rotationExponent);
 
-// using the registration result we can now add the EID beacon to the registry and start it:
-Beacons.add(new EddystoneEID(registrationResult.getIdentityKey(), rotationExponent,
-      registrationResult.getTimeOffset()));
+// using the registration result we can now start an EID beacon
+new EddystoneEID(registrationResult.getIdentityKey(), rotationExponent,
+      registrationResult.getTimeOffset()).start();
 ```
 
 ### Eddystone-GATT
 
 An actual Eddystone-GATT configuration service can run on the local device, allowing a remote user to configure a new or existing Eddystone URL/UID/EID beacon.
 
-The final configured beacon's type may be different than the one provided to GATT, because its type may change (e.g. it was an Eddystone-URL and it ends up an Eddystone-UID, etc.)
+The final configured beacon may be different than the initially configured one, because its type may change (e.g. it was an Eddystone-URL and it ends up an Eddystone-UID, etc.)
 
-You receive the configured beacon in a callback after the owner disconnects. The beacon will already be saved and running.
+You receive the configured beacon in a callback after the owner disconnects. The beacon will already be enabled for advertising.
+If you provide an initial configurable beacon, the final beacon will also be automatically saved, if the original beacon was saved.
+If the final beacon is of a different type, the original beacon will be deleted, and its Lock Key, name, and other basic properties will be copied to the new beacon.
+
 
 ```java
 mGattServer = new EddystoneGattServer(new EddystoneGattServer.Listener() {
    @Override
    public void onGattFinished(EddystoneBase configuredBeacon) {
       if (null != configuredBeacon) {
-         // take action. The (new) beacon is already saved
+         // take action - configured beacon is started at this point
+         
+         // the final beacon's saved state depends on the provided configurable beacon saved state
+         // if you provided a non-saved beacon (or none at all), save here if desired
+         configuredBeacon.save(true);
       }
+      
+      // mark object as disposable
       mGattServer = null;   // close() not needed here
    }
 });
@@ -146,15 +154,17 @@ You can then start the GATT service, passing in an optional beacon as the config
 The beacon will become connectable while being configured, so most probably it will no longer advertise during this time.
 
 ```java
-// use a new, blank, default Eddystone-UID beacon as the configured beacon
-boolean success = mGattServer.start(context)
+// for the initial configured beacon, use an Eddystone-URL that advertises its own Web Bluetooth config URL
+boolean success = mGattServer.start();
 
-// use a new Eddystone-URL that advertises its own Web Bluetooth config URL
-boolean success = mGattServer.start(context, "http://cf.physical-web.org")
+boolean success = mGattServer.start("https://some.custom.url");
+
+// use a blank Eddystone-UID beacon as the configured beacon
+boolean success = mGattServer.start(new EddystoneUID());
 
 // make an existing beacon connectable and configurable. Note that this original
 // beacon might end up DELETED if the final configured beacon is of a separate type.
-boolean success = mGattServer.start(context, myExistingBeacon)
+boolean success = mGattServer.start(myExistingBeacon);
 ```
 
 Every Eddystone beacon has its own Lock Key. To allow future re-configuration, and since the Proximity API also has a field for an Unlock Key, we can't just create a new Unlock Key each time a beacon is configured via GATT.
@@ -185,9 +195,28 @@ mGattServer.setLogger(new Loggable() {
 });
 ```
 
-## Editing beacons
+## Changing beacon state
 
-### Change properties
+A beacon can be in one of three states: Enabled, Paused, or Stopped.
+
+```java
+beacon.start();    // active beacon, it runs when possible
+beacon.pause();    // sets a beacon to paused state, e.g. active but not running
+beacon.stop();     // stops advertising and removes a beacon from active list
+```
+
+## Saving beacons
+
+If you want a beacon to survive between service or app restarts, you should save it to persistent storage.
+The default `save()` method will also enable the beacon to advertise.
+
+```java
+beacon.save();  // equivalent to: beacon.save(false); beacon.start();
+
+beacon.save(false);  // saves the beacon but does not enable it
+```
+
+## Editing beacons
 
 For all beacons, you can update a beacon's TX power, broadcast frequency, name.
 Some beacons properties are immutable (example: EID identity key or clock offset).
@@ -198,40 +227,33 @@ The general pattern to update one or more properties:
 // to fix this, either use a local variable for edit() return type, or call first the set
 // methods defined by the child subclass, and then from its parents.
 beacon.edit()
-   .setName(value)
+   .setName("My awesome beacon!")
    .setAdvertiseMode(value)
    .apply();
 ```
 
-Only if needed (e.g. new TX or frequency), the beacon will restart. Saving is done automatically for you.
+Only if really needed (e.g. a new TX power, advertising mode, or beacon payload changes), the beacon will restart. Saving is automatic.
 
-### Deleting a beacon
+## Deleting a beacon
 
 Use this to permanently remove a beacon from the database.
 
 ```java
-Beacons.delete(beacon);
-```
-
-### Changing a beacon's state
-
-A beacon can be in one of three states: Enabled, Paused, or Stopped.
-
-```java
-Beacons.enable(beacon);   // active beacon, it runs when possible
-Beacons.pause(beacon);    // sets a beacon to paused state, e.g. active but not running
-Beacons.stop(beacon);     // stops and removes a beacon from active list
+beacon.delete();
 ```
 
 ## Listing the beacons
 
-All added beacons are saved in a SQLite database local to your app's storage.
+If **saved***, beacons are stored in a SQLite database, local to your app's storage.
 
-Retrieve the list of *Enabled* and *Paused* beacons by calling `Beacons.getActive()`
+`Beacons.getActive()` will return the list of *Enabled* and *Paused* beacons. Use `beacon.getActiveState()` to determine if a beacon is enabled or paused.
 
-Stopped beacons are saved to storage. To iterate over them, use `Beacons.getStopped()` to get a `Cursor`.
+If you saved a beacon, it can later be retrieved by its saved ID using `Beacons.getSaved()`
 
-While iterating over the cursor you can call `Storage.itemFromCursor()` to deserialize into specific beacon instances. 
+To iterate over **all** stopped beacons which are **saved**, use `Beacons.getStopped()` to get a `Cursor`.
+You cannot recover back a stopped unsaved beacon through the API, since no references to them are kept.
+
+While iterating over the cursor you can call `Storage.itemFromCursor()` to deserialize the current cursor row into a specific beacon instance. 
 
 ## Listening for events
 

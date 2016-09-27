@@ -16,11 +16,11 @@ public class iBeacon extends Beacon {
     private int mMajor;
     private int mMinor;
 
-    public iBeacon(long itemId,
+    public iBeacon(long storageId,
                    byte[] uuid, int major, int minor, @AdvertiseMode int advertiseMode,
                    @AdvertiseTxPower int txPowerLevel,
                    int flags, String name) {
-        super(itemId, advertiseMode, txPowerLevel, flags, name);
+        super(storageId, advertiseMode, txPowerLevel, flags, name);
 
         init(uuid, major, minor);
     }
@@ -62,8 +62,8 @@ public class iBeacon extends Beacon {
     }
 
     @Override
-    public Advertiser createBeacon(AdvertisersManager advertisersManager) {
-        return setBeacon(new iBeaconAdvertiser(advertisersManager, getAdvertiseMode(), getTxPowerLevel(),
+    public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
+        return setAdvertiser(new iBeaconAdvertiser(advertisersManager, getAdvertiseMode(), getTxPowerLevel(),
                 mUuid, mMajor, mMinor, getFlags(), isConnectable()));
     }
 

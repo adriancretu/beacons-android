@@ -56,11 +56,11 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
             buffer.put((byte) 0x30);
             buffer.put(eddystoneEID.getRotationExponent());
             buffer.putInt(eddystoneEID.getEidClock());
-            buffer.put(eddystoneEID.createBeacon(null).getServiceData(), 2, 8);
+            buffer.put(eddystoneEID.createAdvertiser(null).getServiceData(), 2, 8);
 
             return buffer.array();
         }
-        return ((EddystoneAdvertiser) beacon.createBeacon(null)).getServiceData();
+        return ((EddystoneAdvertiser) beacon.createAdvertiser(null)).getServiceData();
     }
 
     @Override

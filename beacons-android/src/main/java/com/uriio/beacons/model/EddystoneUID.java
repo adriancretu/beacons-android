@@ -19,10 +19,10 @@ public class EddystoneUID extends EddystoneBase {
      * @param domainHint           Optional domain name hinted as the source for namespace.
      *                             Setting this does not modify the namespace/instance.
      */
-    public EddystoneUID(long id, byte[] namespaceInstance, String domainHint, byte[] lockKey,
+    public EddystoneUID(long storageId, byte[] namespaceInstance, String domainHint, byte[] lockKey,
                         @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(id, EDDYSTONE_UID, lockKey, mode, txPowerLevel, name);
+        super(storageId, EDDYSTONE_UID, lockKey, mode, txPowerLevel, name);
 
         mNamespaceInstance = null != namespaceInstance ? namespaceInstance : new byte[16];
         mDomainHint = domainHint;
@@ -57,6 +57,10 @@ public class EddystoneUID extends EddystoneBase {
         this(namespaceInstance, null, lockKey, null);
     }
 
+    public EddystoneUID(byte[] namespaceInstance, String name) {
+        this(namespaceInstance, null, null, name);
+    }
+
     public EddystoneUID(byte[] namespaceInstance) {
         this(namespaceInstance, null, null, null);
     }
@@ -80,8 +84,8 @@ public class EddystoneUID extends EddystoneBase {
     }
 
     @Override
-    public Advertiser createBeacon(AdvertisersManager advertisersManager) {
-        return setBeacon(new EddystoneAdvertiser(mNamespaceInstance, 0, 16, advertisersManager,
+    public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
+        return setAdvertiser(new EddystoneAdvertiser(mNamespaceInstance, 0, 16, advertisersManager,
                 getAdvertiseMode(), getTxPowerLevel(), isConnectable(), getFlags()));
     }
 

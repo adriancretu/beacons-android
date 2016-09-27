@@ -12,9 +12,9 @@ import org.uribeacon.beacon.UriBeacon;
 public class EddystoneURL extends EddystoneBase {
     private String mURL;
 
-    public EddystoneURL(long id, String url, byte[] lockKey, @Beacon.AdvertiseMode int mode,
+    public EddystoneURL(long storageId, String url, byte[] lockKey, @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(id, EDDYSTONE_URL, lockKey, mode, txPowerLevel, name);
+        super(storageId, EDDYSTONE_URL, lockKey, mode, txPowerLevel, name);
         mURL = url;
     }
 
@@ -56,12 +56,12 @@ public class EddystoneURL extends EddystoneBase {
     }
 
     @Override
-    public Advertiser createBeacon(AdvertisersManager advertisersManager) {
+    public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
         byte[] data = UriBeacon.encodeUri(mURL);
         if (null == data) return null;
 
         int len = data.length;
-        return setBeacon(new EddystoneAdvertiser(data, 0, len, advertisersManager, getAdvertiseMode(),
+        return setAdvertiser(new EddystoneAdvertiser(data, 0, len, advertisersManager, getAdvertiseMode(),
                 getTxPowerLevel(), isConnectable(), getFlags()));
     }
 
