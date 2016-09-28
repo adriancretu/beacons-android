@@ -34,14 +34,14 @@ A **beacon scanning** library. To scan for beacons in your app, use the Nearby A
 - Eddystone-config GATT service implementation, allowing:
    * remote Eddystone-EID beacon registration via Google's [Beacon Tools](https://play.google.com/store/apps/details?id=com.google.android.apps.location.beacon.beacontools) app
    * remote Eddystone-URL setup via Web Bluetooth, just by using Chrome
-- Persistent Service for beacon state and advertising management
+- Android Service for managing beacon advertising
 - Persistence layer: beacons can be saved to local storage so they survive app restarts / service kills.
 
 *IMPORTANT!*
-A persistent minimum priority notification allows the user to stop all currently running beacons for the following reason.
+A minimum-priority notification allows the user to stop all currently running beacons, for the following reason.
 If your app crashes or the beacons service is killed and restarted, all **saved** active beacons will restart advertising.
 A device has a maximum number of concurrent BLE broadcasters (4 on *Nexus 6*; 8 on *Galaxy S7*, etc.). When this number is reached, new beacons will fail to start.
-It's best to make sure to stop or delete a beacon after you no longer need it, but the notification assures the user is in control.
+It's best to make sure you `stop()` or `delete()` a beacon after you no longer need it, but the notification assures the user is in control.
 
 ### Setup
 1. Add the library to your app module's **build.gradle**.
@@ -138,7 +138,8 @@ mGattServer = new EddystoneGattServer(new EddystoneGattServer.Listener() {
 
 You can then start the GATT service, passing in an optional beacon as the configured beacon.
 
-The beacon will become connectable while being configured, so most probably it will no longer advertise during this time.
+The provided beacon will become connectable, so most probably it will no longer advertise while someone is connected.
+**At least on some devices, if another BLE advertiser starts while you are connected, the connection may be dropped.**
 
 ```java
 // for the initial configured beacon, use an Eddystone-URL that advertises its own Web Bluetooth config URL
