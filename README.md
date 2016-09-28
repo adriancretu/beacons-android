@@ -1,8 +1,8 @@
 ## Android BLE beacon advertising library
 
-This library is used by the [Beacon Toy](https://play.google.com/store/apps/details?id=com.uriio) app and is also the main dependency for [Ephemeral URL beacons](https://github.com/uriio/uriio-android)
+Broadcast Bluetooth Low Energy beacons directly from Android 5.0 or later, on [devices that support BLE peripheral mode](#known-supported-devices).
+This library powers the [**Beacon Toy**](https://play.google.com/store/apps/details?id=com.uriio) app and the [UriIO client library](https://github.com/uriio/uriio-android) for ephemeral URL beacons.
 
-- [Description](#description)
 - [Features](#features)
 - [Setup](#setup)
 - [Create a beacon](#creating-beacons)
@@ -17,44 +17,31 @@ This library is used by the [Beacon Toy](https://play.google.com/store/apps/deta
 - [Listen for events](#listening-for-events)
 - [Notification actions](#notification-actions)
     
-#### What this library is:
+#### What this library is
 
-A way for your app to broadcast as a Bluetooth beacon, as explained on this page.
+An easy way for your app to broadcast Bluetooth beacons, as explained on this page.
 
-#### What this library **isn't**:
+#### What this library **isn't**
 
-This is not a *beacon scanning* library. Please use either the Nearby API, or (for advanced use-cases) [OneBeacon](https://github.com/Codefy/onebeacon-android) for that.
-
-### Description
-
-Broadcast Bluetooth Low Energy beacons directly from Android 5.0 or later, on devices that support BLE peripheral mode.
-
-Examples of supported devices:
-
-- Nexus 6P, 6, 5X, 9;
-- Asus Zenfone 2;
-- HTC One M9;
-- Lenovo K3 Note;
-- LG G4;
-- Moto G3, X Play, Droid Turbo 2;
-- OnePlus ONE 2;
-- Samsung Galaxy S5, S6, S7, Note 4, Tab S, J5;
-- Sony Xperia Z5 Compact;
-- Xiaomi Note 2/3;
+A **beacon scanning** library. To scan for beacons in your app, use the Nearby API, or (for advanced needs) try [OneBeacon](https://github.com/Codefy/onebeacon-android).
 
 ### Features
-- Create beacons and advertise as:
-   * Eddystone-URL
+- Supported beacon formats:
+   * Eddystone-URL (Physical Web)
    * Eddystone-UID
-   * Eddystone EID, with automatic beacon update when EID expires
+   * real Eddystone-EID, with automatic beacon update when EID expires
    * iBeacon
-   * Connectable Eddystone-GATT service, that allows:
-      * registering a new EID beacon with [Beacon Tools](https://play.google.com/store/apps/details?id=com.google.android.apps.location.beacon.beacontools)
-      * setting up an Eddystone-URL remotely with Web Bluetooth, just by using Chrome
-- Persistent Service that manages the virtual beacons and their states
-- Beacons are saved to device storage for later reuse
+- Eddystone-config GATT service implementation, allowing:
+   * remote Eddystone-EID beacon registration via Google's [Beacon Tools](https://play.google.com/store/apps/details?id=com.google.android.apps.location.beacon.beacontools) app
+   * remote Eddystone-URL setup via Web Bluetooth, just by using Chrome
+- Persistent Service for beacon state and advertising management
+- Persistence layer: beacons can be saved to local storage so they survive app restarts / service kills.
 
-*CAREFUL* - the service will restore active beacons when it (re)starts, so be sure that you either stop or delete a beacon after you no longer need it, If your app crashes, the service may restart and bring the beacon back, so make sure you check what beacons are enabled and stop the ones that you no longer need. Besides freeing resources, every device has a maximum number of concurrent BLE broadcasters (4 on Nexus 6; 8 on Galaxy S7, etc.). When this number is reached, new beacons will fail to start.
+*IMPORTANT!*
+A persistent minimum priority notification allows the user to stop all currently running beacons for the following reason.
+If your app crashes or the beacons service is killed and restarted, all **saved** active beacons will restart advertising.
+A device has a maximum number of concurrent BLE broadcasters (4 on *Nexus 6*; 8 on *Galaxy S7*, etc.). When this number is reached, new beacons will fail to start.
+It's best to make sure to stop or delete a beacon after you no longer need it, but the notification assures the user is in control.
 
 ### Setup
 1. Add the library to your app module's **build.gradle**.
@@ -335,3 +322,32 @@ Clone the repo and build the library:
 ```
 
 For a painless process, make sure your Android SDK and environment are correctly set-up.
+
+## Known supported devices
+
+Non-exhaustive list of devices where BLE advertising is known to work.
+
+- Phones and tablets
+   - Google Nexus 6P, 6, 5X, 9, rooted Nexus 5 (if patched)
+   - Asus Zenfone 2
+   - HTC One M9, Desire 626s
+   - Huawei Honor 5X, Union
+   - Lenovo K3 Note
+   - LG G4, G5, V10, Spirit, Tribute 5
+   - Moto X Play, X Style, X2, G2, G3, G4, Z Droid, Droid Turbo 2
+   - Nextbit Robin
+   - OnePlus 2, 3
+   - OPPO A33f
+   - Samsung Galaxy:
+      * S7 [Edge] - up to 8 concurrent running BLE advertisers
+      * S5 [Active/Neo], S6 [Edge/Active]
+      * Note 4, Note Edge, Note 5
+      * Tab S 10.5
+      * A3, A5
+      * J3 Duos, J5
+      * Core Prime, Grand Prime, On7
+   - Sony Xperia Z5 Compact, C5 Ultra, C3, M4 Aqua
+   - Xiaomi Redmi Note 2/3
+   - ZTE ZMAX 2
+- Android TVs
+   - Sony Bravia 2015
