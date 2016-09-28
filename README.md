@@ -326,10 +326,13 @@ For a painless process, make sure your Android SDK and environment are correctly
 ## Known supported devices
 
 Non-exhaustive list of devices where BLE advertising is known to work.
+[Brackets] indicate variations besides the base model.
 
 - Phones and tablets
    - Google Nexus 6P, 6, 5X, 9, rooted Nexus 5 (if patched)
-   - Asus Zenfone 2
+   - Alcatel One Touch Idol 3 [Dual SIM]
+   - Asus Zenfone 2 [Laser], Zenpad 8
+   - Blackberry Priv
    - HTC One M9, Desire 626s
    - Huawei Honor 5X, Union
    - Lenovo K3 Note
@@ -340,14 +343,14 @@ Non-exhaustive list of devices where BLE advertising is known to work.
    - OPPO A33f
    - Samsung Galaxy:
       * S7 [Edge] - up to 8 concurrent running BLE advertisers
-      * S5 [Active/Neo], S6 [Edge/Active]
+      * S5 [Active/Neo], S6 [Active/Edge/Edge Plus]
       * Note 4, Note Edge, Note 5
-      * Tab S 10.5
+      * Tab S 10.5, Tab S2 8.0
       * A3, A5
       * J3 Duos, J5
       * Core Prime, Grand Prime, On7
-   - Sony Xperia Z5 Compact, C5 Ultra, C3, M4 Aqua
-   - Xiaomi Redmi Note 2/3
-   - ZTE ZMAX 2
+   - Sony Xperia Z5 Compact, C5 Ultra, C3, M4 Aqua [Dual]
+   - Xiaomi Redmi Note 2, Note 3, Mi 4
+   - ZTE ZMAX 2, Warp Elite
 - Android TVs
    - Sony Bravia 2015
