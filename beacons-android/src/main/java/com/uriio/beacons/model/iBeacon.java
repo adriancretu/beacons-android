@@ -56,7 +56,7 @@ public class iBeacon extends Beacon {
     }
 
     private void init(byte[] uuid, int major, int minor) {
-        mUuid = uuid;
+        mUuid = null != uuid && 16 == uuid.length ? uuid : new byte[16];
         mMajor = major;
         mMinor = minor;
     }
