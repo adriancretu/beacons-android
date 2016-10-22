@@ -1,3 +1,7 @@
+### 1.4.3 (October 22, 2016)
+* Handle some obscure NPE cases
+* Use Android API level 25 build tools
+
 ### 1.4.2 (September 27, 2016)
 * Beacon persistence is now optional
 * API changes:

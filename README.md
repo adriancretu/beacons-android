@@ -49,7 +49,7 @@ It's best to make sure you `stop()` or `delete()` a beacon after you no longer n
    ```groovy
    dependencies {
       ...
-      compile 'com.uriio:beacons-android:1.4.2'
+      compile 'com.uriio:beacons-android:1.4.3'
    }
    ```
 
@@ -232,16 +232,13 @@ beacon.delete();
 
 ## Listing the beacons
 
-If **saved***, beacons are stored in a SQLite database, local to your app's storage.
+`Beacons.getActive()` will return the list of *enabled* or *paused* beacons. Call `beacon.getActiveState()` to determine if a beacon is enabled or paused.
 
-`Beacons.getActive()` will return the list of *Enabled* and *Paused* beacons. Use `beacon.getActiveState()` to determine if a beacon is enabled or paused.
+**Saved** beacons are stored in a private SQLite database, accesible only by your app (unless rooted, obviously).
+If a beacon is saved, it can be retrieved by its saved ID. Otherwise, when it's stopped (or the app somehow gets killed), the beacon will be gone forever.
 
-If you saved a beacon, it can later be retrieved by its saved ID using `Beacons.getSaved()`
-
-To iterate over **all** stopped beacons which are **saved**, use `Beacons.getStopped()` to get a `Cursor`.
-You cannot recover back a stopped unsaved beacon through the API, since no references to them are kept.
-
-While iterating over the cursor you can call `Storage.itemFromCursor()` to deserialize the current cursor row into a specific beacon instance. 
+To iterate over the **stopped but saved** beacons, use `Beacons.getStopped()` which returns a `Cursor`.
+While iterating over the cursor call `Storage.itemFromCursor()` to create a specific beacon instance from the current row of the cursor.
 
 ## Listening for events
 
@@ -330,14 +327,14 @@ Non-exhaustive list of devices where BLE advertising is known to work.
 [Brackets] indicate variations besides the base model.
 
 - Phones and tablets
-   - Google Nexus 6P, 6, 5X, 9, rooted Nexus 5 (if patched)
-   - Alcatel One Touch Idol 3 [Dual SIM]
+   - Google Pixel, Nexus 6P, 6, 5X, 9, patched Nexus 5
+   - Alcatel One Touch Idol 3 [Dual SIM], Fierce XL
    - Asus Zenfone 2 [Laser], Zenpad 8
    - Blackberry Priv
-   - HTC One M9, Desire 626s
+   - HTC 10, One M9, Desire 626s
    - Huawei Honor 5X, Union
-   - Lenovo K3 Note
-   - LG G4, G5, V10, Spirit, Tribute 5
+   - Lenovo K3 Note, Vibe P1m, Vibe K4 Note
+   - LG G4, G5, G Flex2, V10, K10, Leon, Magna, Optimus Zone 3, Spirit, Tribute 5
    - Moto X Play, X Style, X2, G2, G3, G4, Z Droid, Droid Turbo 2
    - Nextbit Robin
    - OnePlus 2, 3
@@ -345,13 +342,13 @@ Non-exhaustive list of devices where BLE advertising is known to work.
    - Samsung Galaxy:
       * S7 [Edge] - up to 8 concurrent running BLE advertisers
       * S5 [Active/Neo], S6 [Active/Edge/Edge Plus]
-      * Note 4, Note Edge, Note 5
-      * Tab S 10.5, Tab S2 8.0
-      * A3, A5
+      * Note 4, Note Edge, Note 5, Note Pro
+      * Tab S 10.5, Tab S2 8.0, Tab S2 9.7, Tab A 9.7
+      * A3, A5 [Duos]
       * J3 Duos, J5
       * Core Prime, Grand Prime, On7
-   - Sony Xperia Z5 Compact, C5 Ultra, C3, M4 Aqua [Dual]
-   - Xiaomi Redmi Note 2, Note 3, Mi 4
-   - ZTE ZMAX 2, Warp Elite
+   - Sony Xperia Z5 [Compact], C5 Ultra, C3, M4 Aqua [Dual]
+   - Xiaomi Redmi 3, Note 2, Note 3, Mi 4, Mi 4i, Mi 5, Mi Max
+   - ZTE Maven, ZMAX 2, Warp Elite
 - Android TVs
    - Sony Bravia 2015
