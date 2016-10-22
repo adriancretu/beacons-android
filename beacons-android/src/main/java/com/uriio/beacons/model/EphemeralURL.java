@@ -192,7 +192,7 @@ public class EphemeralURL extends EddystoneURL {
         }
 
         public UriioEditor setLongUrl(String url) {
-            if (!url.equals(mLongUrl)) {
+            if (null == url || !url.equals(mLongUrl)) {
                 mLongUrl = url;
             }
             return this;

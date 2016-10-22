@@ -3,6 +3,7 @@ package com.uriio.beacons;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
+import android.support.annotation.NonNull;
 import android.util.Log;
 
 import com.uriio.beacons.model.Beacon;
@@ -32,6 +33,7 @@ public class Beacons {
 
     /** List of active items **/
     private List<Beacon> mActiveItems = null;
+    private boolean mInitialized = false;
 
     private Beacons(Context context) {
         setContext(context);
@@ -49,10 +51,10 @@ public class Beacons {
     }
 
     /**
-     * Initialize the API and use a custom persistence namespace.
+     * Initializes the SDK.
      * @param context   The calling context from which to get the application context.
      */
-    public static void initialize(Context context) {
+    public static void initialize(@NonNull Context context) {
         if (null != _instance) {
             // singleton exists, so just set the app context
             _instance.setContext(context);
@@ -63,27 +65,27 @@ public class Beacons {
 
             _instance = new Beacons(context);
 
-            // cleanup obsolete preferences
+            // clear obsolete preferences
             context.getSharedPreferences(PREFS_FILENAME, Context.MODE_PRIVATE).edit().clear().apply();
 
             Storage.init(context, DEFAULT_DATABASE_NAME);
         }
 
-        if (null == _instance.mActiveItems) {
-            _instance.mActiveItems = new ArrayList<>();
+        if (!_instance.mInitialized) {
+            _instance.mInitialized = true;
 
             // restore active items
             Cursor cursor = Storage.getInstance().getAllItems(false);
             while (cursor.moveToNext()) {
                 Beacon item = Storage.itemFromCursor(cursor);
-                _instance.mActiveItems.add(item);
+                getActive().add(item);
             }
-            cursor.close();
 
-            // make sure that the BLE service is started
-            if (_instance.mActiveItems.size() > 0) {
+            if (cursor.getCount() > 0) {
+                // start the BLE service
                 context.startService(new Intent(context, BleService.class));
             }
+            cursor.close();
         }
     }
 
@@ -104,17 +106,17 @@ public class Beacons {
     /**
      * Retrieves a previously saved beacon by its persistent ID.
      * @param storageId    The beacon storage ID
-     * @return  A beacon instance, either currently active, or loaded from persistent storage.
+     * @return  A beacon instance, either active or loaded from storage.
      */
     public static Beacon getSaved(long storageId) {
         Beacon beacon = findActive(storageId);
-        return null == beacon ? loadItem(storageId) : beacon;
+        return null != beacon ? beacon : loadItem(storageId);
     }
 
     /**
      * Finds an active beacon by it's unique ID.
      * @param uuid    The beacon unique ID. Note: this is not persistent between app restarts.
-     * @return Active (or paused) beacon, or null if uuid is null, beacon is stopped or doesn't exist.
+     * @return Active (enabled or paused) beacon, or null if uuid is null, beacon is stopped or doesn't exist.
      */
     public static Beacon findActive(UUID uuid) {
         if (null == uuid) return null;
@@ -130,7 +132,7 @@ public class Beacons {
     /**
      * Finds an active beacon by it's storage ID.
      * @param storageId    The beacon's storage ID, persistent between app restarts.
-     * @return Active (or paused) beacon, or null if ID is invalid, beacon is stopped or doesn't exist.
+     * @return Active (enabled or paused) beacon, or null if ID is invalid, beacon is stopped or doesn't exist.
      */
     public static Beacon findActive(long storageId) {
         if (storageId <= 0) return null;
@@ -157,11 +159,12 @@ public class Beacons {
     }
 
     /**
-     * @return The collection of all active items. Not all items might actually be broadcasting.
-     * To check if an item is broadcasting call getAdvertiser() on it and also check the beacon status (paused, running)
+     * @return The collection of all active items.
+     * To check if a beacon is enabled or paused call getActiveState()
+     * To check if a beacon is broadcasting call getAdvertiseState()
      */
     public static List<Beacon> getActive() {
-        if (null == getInstance().mActiveItems) _instance.mActiveItems = new ArrayList<>();
+        if (null == getInstance().mActiveItems) return _instance.mActiveItems = new ArrayList<>();
         return _instance.mActiveItems;
     }
 
@@ -174,6 +177,6 @@ public class Beacons {
     }
 
     static void onBleServiceDestroyed() {
-        _instance.mActiveItems = null;
+        _instance.mInitialized = false;
     }
 }
