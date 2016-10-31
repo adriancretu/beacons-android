@@ -327,14 +327,14 @@ Non-exhaustive list of devices where BLE advertising is known to work.
 [Brackets] indicate variations besides the base model.
 
 - Phones and tablets
-   - Google Pixel, Nexus 6P, 6, 5X, 9, patched Nexus 5
+   - Google Pixel [XL], Pixel C, Nexus 6P, 6, 5X, 9, patched Nexus 5
    - Alcatel One Touch Idol 3 [Dual SIM], Fierce XL
    - Asus Zenfone 2 [Laser], Zenpad 8
    - Blackberry Priv
-   - HTC 10, One M9, Desire 626s
+   - HTC 10, One M9, Desire (530/626s)
    - Huawei Honor 5X, Union
    - Lenovo K3 Note, Vibe P1m, Vibe K4 Note
-   - LG G4, G5, G Flex2, V10, K10, Leon, Magna, Optimus Zone 3, Spirit, Tribute 5
+   - LG G3, G4 [Stylus], G5, G Flex2, V10, K10, Leon, Magna, Optimus Zone 3, Spirit, Tribute 5
    - Moto X Play, X Style, X2, G2, G3, G4, Z Droid, Droid Turbo 2
    - Nextbit Robin
    - OnePlus 2, 3
@@ -342,13 +342,13 @@ Non-exhaustive list of devices where BLE advertising is known to work.
    - Samsung Galaxy:
       * S7 [Edge] - up to 8 concurrent running BLE advertisers
       * S5 [Active/Neo], S6 [Active/Edge/Edge Plus]
-      * Note 4, Note Edge, Note 5, Note Pro
-      * Tab S 10.5, Tab S2 8.0, Tab S2 9.7, Tab A 9.7
+      * Note 4, Note Edge, Note 5, Note Pro, unexploded Note 7 (RIP...)
+      * Tab S (8.4/10.5), Tab S2 (8.0/9.7), Tab A 9.7, Tab E
       * A3, A5 [Duos]
       * J3 Duos, J5
-      * Core Prime, Grand Prime, On7
-   - Sony Xperia Z5 [Compact], C5 Ultra, C3, M4 Aqua [Dual]
+      * Alpha, Core Prime, Grand Prime, On7
+   - Sony Xperia Z5 [Compact/Premium], C5 Ultra, C3, M4 Aqua [Dual]
    - Xiaomi Redmi 3, Note 2, Note 3, Mi 4, Mi 4i, Mi 5, Mi Max
-   - ZTE Maven, ZMAX 2, Warp Elite
+   - ZTE Maven, ZMAX 2, Zmax Pro, Warp Elite
 - Android TVs
    - Sony Bravia 2015
