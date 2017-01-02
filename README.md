@@ -49,7 +49,7 @@ It's best to make sure you `stop()` or `delete()` a beacon after you no longer n
    ```groovy
    dependencies {
       ...
-      compile 'com.uriio:beacons-android:1.4.3'
+      compile 'com.uriio:beacons-android:1.4.4'
    }
    ```
 

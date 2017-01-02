@@ -57,12 +57,16 @@ public class EddystoneURL extends EddystoneBase {
 
     @Override
     public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
-        byte[] data = UriBeacon.encodeUri(mURL);
-        if (null == data) return null;
+        // a null URL or a empty URL is allowed
+        byte[] data = null == mURL ? new byte[0] : UriBeacon.encodeUri(mURL);
 
-        int len = data.length;
-        return setAdvertiser(new EddystoneAdvertiser(data, 0, len, advertisersManager, getAdvertiseMode(),
-                getTxPowerLevel(), isConnectable(), getFlags()));
+        if (null == data) {
+            // payload can't be advertised (invalid scheme or other fatal error)
+            return null;
+        }
+
+        return setAdvertiser(new EddystoneAdvertiser(data, 0, data.length, advertisersManager,
+                getAdvertiseMode(), getTxPowerLevel(), isConnectable(), getFlags()));
     }
 
     @Override

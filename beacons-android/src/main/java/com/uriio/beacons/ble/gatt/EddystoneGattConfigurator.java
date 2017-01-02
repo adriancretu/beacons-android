@@ -50,17 +50,23 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
         if (beacon.getType() == Beacon.EDDYSTONE_EID) {
             EddystoneEID eddystoneEID = (EddystoneEID) this.mConfiguredBeacon;
+            EddystoneAdvertiser advertiser = eddystoneEID.createAdvertiser(null);
+            if (null == advertiser) {
+                return new byte[0];
+            }
 
             ByteBuffer buffer = ByteBuffer.allocate(14);
 
             buffer.put((byte) 0x30);
             buffer.put(eddystoneEID.getRotationExponent());
             buffer.putInt(eddystoneEID.getEidClock());
-            buffer.put(eddystoneEID.createAdvertiser(null).getServiceData(), 2, 8);
+            buffer.put(advertiser.getServiceData(), 2, 8);
 
             return buffer.array();
         }
-        return ((EddystoneAdvertiser) beacon.createAdvertiser(null)).getServiceData();
+
+        EddystoneAdvertiser advertiser = (EddystoneAdvertiser) beacon.createAdvertiser(null);
+        return null == advertiser ? new byte[0] : advertiser.getServiceData();
     }
 
     @Override

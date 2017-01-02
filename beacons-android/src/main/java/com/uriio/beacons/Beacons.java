@@ -89,6 +89,10 @@ public class Beacons {
         }
     }
 
+    public static boolean isInitialized() {
+        return _instance.mInitialized;
+    }
+
     /**
      * Stops the background BLE service all-together.
      * Warning: Beacons.initialize() will need to be called if you want to use the API again.
@@ -177,6 +181,9 @@ public class Beacons {
     }
 
     static void onBleServiceDestroyed() {
+        if (null != _instance.mActiveItems) {
+            _instance.mActiveItems.clear();
+        }
         _instance.mInitialized = false;
     }
 }

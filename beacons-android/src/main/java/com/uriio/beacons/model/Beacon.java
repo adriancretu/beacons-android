@@ -219,7 +219,11 @@ public abstract class Beacon {
 
             if (state != Beacon.ACTIVE_STATE_STOPPED) {
                 // beacon is not active, and will not be stopped
-                Beacons.getActive().add(this);
+                if (Beacons.isInitialized()) {
+                    // prevent adding the beacon as active a second time on init, if thee service
+                    // is not started at this point (example: stopping last beacon -> starting a new one)
+                    Beacons.getActive().add(this);
+                }
             }
         }
 

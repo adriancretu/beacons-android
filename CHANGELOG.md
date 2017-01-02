@@ -1,3 +1,7 @@
+### 1.4.4 (January 2, 2017)
+* Fix crash when Eddystone-URL has no payload
+* Update and fix build environment if OSS repository default credentials don't exist
+
 ### 1.4.3 (October 22, 2016)
 * Handle some obscure NPE cases
 * Use Android API level 25 build tools

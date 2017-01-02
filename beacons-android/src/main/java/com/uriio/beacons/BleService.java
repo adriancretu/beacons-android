@@ -158,7 +158,6 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
             for (Beacon beacon : Beacons.getActive()) {
                 mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
             }
-            Beacons.getActive().clear();
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
 
             mStarted = false;
@@ -415,7 +414,12 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
             switch (item.getType()) {
                 case Beacon.EDDYSTONE_URL:
                 case Beacon.EPHEMERAL_URL:
-                    builder.append(((EddystoneURL) item).getURL());
+                    String url = ((EddystoneURL) item).getURL();
+
+                    if (null == url) url = "<no URL>";
+                    else if (url.length() == 0) url = "<empty URL>";
+
+                    builder.append(url);
                     break;
                 case Beacon.EDDYSTONE_UID:
                     builder.append("Eddystone-UID");

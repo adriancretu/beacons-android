@@ -5,6 +5,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
+import android.support.annotation.NonNull;
 import android.util.Base64;
 
 import com.uriio.beacons.model.Beacon;
@@ -159,8 +160,7 @@ public class Storage extends SQLiteOpenHelper {
         mInsertItemStmt.bindLong(3, txPowerLevel);
         mInsertItemStmt.bindLong(4, kind);
         mInsertItemStmt.bindLong(5, flags);
-        if (null == name) mInsertItemStmt.bindNull(6);
-        else mInsertItemStmt.bindString(6, name);
+        bindStringOrNull(mInsertItemStmt, 6, name);
 
         return mInsertItemStmt.executeInsert();
     }
@@ -180,9 +180,7 @@ public class Storage extends SQLiteOpenHelper {
 
         mInsertUriioItemStmt.bindString(2, item.getUrlToken());
 
-        String longUrl = item.getLongUrl();
-        if (null == longUrl) mInsertUriioItemStmt.bindNull(3);
-        else mInsertUriioItemStmt.bindString(3, longUrl);
+        bindStringOrNull(mInsertUriioItemStmt, 3, item.getLongUrl());
 
         mInsertUriioItemStmt.bindLong(4, item.getUrlId());
         mInsertUriioItemStmt.bindLong(5, item.getTimeToLive());
@@ -212,15 +210,12 @@ public class Storage extends SQLiteOpenHelper {
             mInsertEddystoneItemStmt = db.compileStatement("INSERT INTO " + EDDYSTONE_TABLE +
                     " (rowid, url, domain, lockKey) VALUES (?, ?, ?, ?)");
         }
-        mInsertEddystoneItemStmt.bindString(2, getEddystonePayload(item));
+
+        // the URL may be null, prevent SQLite crash
+        bindStringOrNull(mInsertEddystoneItemStmt, 2, getEddystonePayload(item));
 
         String domain = item.getType() == Beacon.EDDYSTONE_UID ? ((EddystoneUID) item).getDomainHint() : null;
-        if (null == domain) {
-            mInsertEddystoneItemStmt.bindNull(3);
-        }
-        else {
-            mInsertEddystoneItemStmt.bindString(3, domain);
-        }
+        bindStringOrNull(mInsertEddystoneItemStmt, 3, domain);
 
         mInsertEddystoneItemStmt.bindBlob(4, item.getLockKey());
 
@@ -271,13 +266,7 @@ public class Storage extends SQLiteOpenHelper {
             mUpdateShortUrlStmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET shortUrl=?, expires=? WHERE rowid=?");
         }
 
-        String shortUrl = item.getURL();
-        if (null == shortUrl) {
-            mUpdateShortUrlStmt.bindNull(1);
-        }
-        else {
-            mUpdateShortUrlStmt.bindString(1, shortUrl);
-        }
+        bindStringOrNull(mUpdateShortUrlStmt, 1, item.getURL());
 
         mUpdateShortUrlStmt.bindLong(2, item.getActualExpireTime());
         mUpdateShortUrlStmt.bindLong(3, item.getSavedId());
@@ -411,14 +400,12 @@ public class Storage extends SQLiteOpenHelper {
         updateItem(db, item);
 
         SQLiteStatement stmtUpdateEddystone = db.compileStatement("UPDATE " + EDDYSTONE_TABLE + " SET url=?, domain=? WHERE rowid=?");
-        stmtUpdateEddystone.bindString(1, getEddystonePayload(item));
+
+        // the URL may be null, prevent SQLite crash
+        bindStringOrNull(stmtUpdateEddystone, 1, getEddystonePayload(item));
 
         String domain = item.getType() == Beacon.EDDYSTONE_UID ? ((EddystoneUID) item).getDomainHint() : null;
-        if (null == domain) {
-            stmtUpdateEddystone.bindNull(2);
-        } else {
-            stmtUpdateEddystone.bindString(2, domain);
-        }
+        bindStringOrNull(stmtUpdateEddystone, 2, domain);
 
         stmtUpdateEddystone.bindLong(3, item.getSavedId());
 
@@ -436,9 +423,7 @@ public class Storage extends SQLiteOpenHelper {
         SQLiteStatement stmt = db.compileStatement("UPDATE " + URIIO_TABLE + " SET ttl=?, longUrl=? WHERE rowid=?");
         stmt.bindLong(1, item.getTimeToLive());
 
-        String longUrl = item.getLongUrl();
-        if (null == longUrl) stmt.bindNull(2);
-        else stmt.bindString(2, longUrl);
+        bindStringOrNull(stmt, 2, item.getLongUrl());
 
         stmt.bindLong(3, id);
 
@@ -451,9 +436,7 @@ public class Storage extends SQLiteOpenHelper {
         stmt.bindLong(2, item.getTxPowerLevel());
         stmt.bindLong(3, item.getFlags());
 
-        String name = item.getName();
-        if (null == name) stmt.bindNull(4);
-        else stmt.bindString(4, name);
+        bindStringOrNull(stmt, 4, item.getName());
 
         stmt.bindLong(5, item.getSavedId());
 
@@ -521,5 +504,20 @@ public class Storage extends SQLiteOpenHelper {
                 return Base64.encodeToString(((EddystoneUID) beacon).getNamespaceInstance(), Base64.NO_PADDING);
         }
         return null;
+    }
+
+    /**
+     * Binds either a string or NULL to a SQLite statement.
+     * Reason: trying to bind a null string would normally crash the app.
+     * @param statement    SQLite statement
+     * @param value        A string, or null
+     */
+    private void bindStringOrNull(@NonNull SQLiteStatement statement, int index, String value) {
+        if (null == value) {
+            statement.bindNull(index);
+        }
+        else {
+            statement.bindString(index, value);
+        }
     }
 }
