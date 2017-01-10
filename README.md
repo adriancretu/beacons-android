@@ -19,7 +19,7 @@ This library powers the [**Beacon Toy**](https://play.google.com/store/apps/deta
     
 #### What this library is
 
-An easy way for your app to broadcast Bluetooth beacons, as explained on this page.
+An easy way for your app to broadcast Bluetooth beacons.
 
 #### What this library **isn't**
 
@@ -29,12 +29,14 @@ A **beacon scanning** library. To scan for beacons in your app, use the Nearby A
 - Supported beacon formats:
    * Eddystone-URL (Physical Web)
    * Eddystone-UID
-   * real Eddystone-EID, with automatic beacon update when EID expires
+   * actual Eddystone-EID, with automatic advertiser updates of EID payload
    * iBeacon
-- Eddystone-config GATT service implementation, allowing:
+   * any other custom kinds (simple extensions)
+- Eddystone-config GATT service host, allowing:
    * remote Eddystone-EID beacon registration via Google's [Beacon Tools](https://play.google.com/store/apps/details?id=com.google.android.apps.location.beacon.beacontools) app
-   * remote Eddystone-URL setup via Web Bluetooth, just by using Chrome
-- Android Service for managing beacon advertising
+   * remote Eddystone-URL / Eddystone-UID setup via Web Bluetooth, just by using Chrome
+   * all other Eddystone-GATT spec features, such as changing Lock-Key, etc.
+- A very light Android Service, for managing beacon advertising
 - Persistence layer: beacons can be saved to local storage so they survive app restarts / service kills.
 
 *IMPORTANT!*
@@ -238,7 +240,7 @@ beacon.delete();
 If a beacon is saved, it can be retrieved by its saved ID. Otherwise, when it's stopped (or the app somehow gets killed), the beacon will be gone forever.
 
 To iterate over the **stopped but saved** beacons, use `Beacons.getStopped()` which returns a `Cursor`.
-While iterating over the cursor call `Storage.itemFromCursor()` to create a specific beacon instance from the current row of the cursor.
+While iterating over the cursor call `Beacon.fromCursor()` to create the specific beacon instance.
 
 ## Listening for events
 
@@ -331,23 +333,25 @@ Non-exhaustive list of devices where BLE advertising is known to work.
    - Alcatel One Touch Idol 3 [Dual SIM], Fierce XL
    - Asus Zenfone 2 [Laser], Zenpad 8
    - Blackberry Priv
-   - HTC 10, One M9, Desire (530/626s)
-   - Huawei Honor 5X, Union
+   - HTC 10, One M9, Desire (530/626s/820)
+   - Huawei Ascend Y550, Honor 5X, Union
    - Lenovo K3 Note, Vibe P1m, Vibe K4 Note
-   - LG G3, G4 [Stylus], G5, G Flex2, V10, K10, Leon, Magna, Optimus Zone 3, Spirit, Tribute 5
+   - LG:
+      * G5, G4 [Stylus], G3, G Flex2, G Vista 2
+	  * V10, K10, L Bello, Lancet, Leon, Magna, Optimus Zone 3, Spirit, Tribute 5
    - Moto X Play, X Style, X2, G2, G3, G4, Z Droid, Droid Turbo 2
    - Nextbit Robin
    - OnePlus 2, 3
    - OPPO A33f
    - Samsung Galaxy:
       * S7 [Edge] - up to 8 concurrent running BLE advertisers
-      * S5 [Active/Neo], S6 [Active/Edge/Edge Plus]
-      * Note 4, Note Edge, Note 5, Note Pro, unexploded Note 7 (RIP...)
-      * Tab S (8.4/10.5), Tab S2 (8.0/9.7), Tab A 9.7, Tab E
-      * A3, A5 [Duos]
-      * J3 Duos, J5
+      * S6 [Active/Edge/Edge Plus], S5 [Active/Neo]
+      * Note 5, Note Edge, Note 4
+      * Tab S2 (8.0/9.7), Tab S (8.4/10.5), Note Pro, Tab A 9.7, Tab E
+      * A5 2016 [Duos]
+      * J5, J3 Duos
       * Alpha, Core Prime, Grand Prime, On7
-   - Sony Xperia Z5 [Compact/Premium], C5 Ultra, C3, M4 Aqua [Dual]
+   - Sony Xperia E5, X, Z5 [Compact/Premium], C5 Ultra, C3, M4 Aqua [Dual]
    - Xiaomi Redmi 3, Note 2, Note 3, Mi 4, Mi 4i, Mi 5, Mi Max
    - ZTE Maven, ZMAX 2, Zmax Pro, Warp Elite
 - Android TVs
