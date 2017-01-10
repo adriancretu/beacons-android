@@ -26,7 +26,10 @@ import android.util.Log;
 import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.model.Beacon;
+import com.uriio.beacons.model.EddystoneEID;
+import com.uriio.beacons.model.EddystoneUID;
 import com.uriio.beacons.model.EddystoneURL;
+import com.uriio.beacons.model.iBeacon;
 
 import java.util.UUID;
 
@@ -57,8 +60,11 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     public static final int EVENT_ADVERTISER_FAILED     = 4;
     public static final int EVENT_ADVERTISE_UNSUPPORTED = 5;
 
-    // TODO - separate this from the bunch...
-    public static final int EVENT_SHORTURL_FAILED       = 6;
+    /**
+     * Sent when the beacon was not started because of a missing precondition or error.
+     * Example: retrieving the URL to be advertised from a back-end server failed.
+     */
+    public static final int EVENT_START_FAILED          = 6;
 
     /** Intent extra - beacon UUID */
     public static final String EXTRA_ITEM_ID         = "id";
@@ -265,6 +271,8 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         }
 
         if (!isAdvertisingSupported()) {
+            beacon.pause();
+            broadcastBeaconEvent(EVENT_ADVERTISE_UNSUPPORTED, beacon);
             return false;
         }
 
@@ -274,7 +282,7 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
             mAdvertisersManager.enableAdvertiser(existingAdvertiser, false);
         }
 
-        Advertiser advertiser = beacon.createAdvertiser(mAdvertisersManager);
+        Advertiser advertiser = beacon.recreateAdvertiser(mAdvertisersManager);
 
         return null != advertiser && mAdvertisersManager.startAdvertiser(advertiser);
     }
@@ -337,6 +345,18 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         }
     }
 
+    @Override
+    public void onBLEAdvertiseFailed(Advertiser advertiser, int errorCode) {
+        Beacon beacon = findActiveBeacon(advertiser);
+        if (null != beacon) {
+            // mark beacon as paused so we can try to start it again
+            beacon.pause();
+            beacon.setError("Failure " + errorCode);
+            broadcastError(beacon, EVENT_ADVERTISER_FAILED, errorCode);
+        }
+    }
+    //endregion
+
     private void updateForegroundNotification(boolean newAdvertiserStarted) {
         NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
         int totalRunning = fillInboxStyleNotification(inboxStyle);
@@ -375,21 +395,6 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         }
     }
 
-    @Override
-    public void onBLEAdvertiseFailed(Advertiser advertiser, int errorCode) {
-        Beacon beacon = findActiveBeacon(advertiser);
-        if (null != beacon) {
-            beacon.setError("Failure " + errorCode);
-            broadcastError(beacon, EVENT_ADVERTISER_FAILED, errorCode);
-        }
-    }
-
-    @Override
-    public void onBLEAdvertiseNotSupported() {
-        broadcastBeaconEvent(EVENT_ADVERTISE_UNSUPPORTED, null);
-    }
-    //endregion
-
     private static final String[] _txPowers = {
             "<font color=\"#008000\">ULP</font>",
             "<font color=\"#000080\">Low</font>",
@@ -411,25 +416,19 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
 
             SpannableStringBuilder builder = new SpannableStringBuilder();
 
-            switch (item.getType()) {
-                case Beacon.EDDYSTONE_URL:
-                case Beacon.EPHEMERAL_URL:
-                    String url = ((EddystoneURL) item).getURL();
+            if (item instanceof EddystoneURL) {
+                String url = ((EddystoneURL) item).getURL();
 
-                    if (null == url) url = "<no URL>";
-                    else if (url.length() == 0) url = "<empty URL>";
+                if (null == url) url = "<no URL>";
+                else if (url.length() == 0) url = "<empty URL>";
 
-                    builder.append(url);
-                    break;
-                case Beacon.EDDYSTONE_UID:
-                    builder.append("Eddystone-UID");
-                    break;
-                case Beacon.EDDYSTONE_EID:
-                    builder.append("Eddystone-EID");
-                    break;
-                case Beacon.IBEACON:
-                    builder.append("iBeacon");
-                    break;
+                builder.append(url);
+            } else if (item instanceof EddystoneUID) {
+                builder.append("Eddystone-UID");
+            } else if (item instanceof EddystoneEID) {
+                builder.append("Eddystone-EID");
+            } else if (item instanceof iBeacon) {
+                builder.append("iBeacon");
             }
             builder.append(" ").append(Html.fromHtml(_txPowers[item.getTxPowerLevel()]))
                     .append(" ").append(Html.fromHtml(_advModes[item.getAdvertiseMode()]));

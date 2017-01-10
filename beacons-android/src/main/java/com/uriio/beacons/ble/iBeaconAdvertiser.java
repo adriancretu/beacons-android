@@ -24,7 +24,7 @@ public class iBeaconAdvertiser extends Advertiser {
                              byte[] proximityUUID, int major, int minor, int flags, boolean connectable) {
         super(advertisersManager, mode, txPowerLevel, connectable);
 
-        byte measuredPower = advertisersManager.getZeroDistanceTxPower(txPowerLevel);
+        byte measuredPower = AdvertisersManager.getZeroDistanceTxPower(txPowerLevel);
         measuredPower -= 41;
 
         int indicator = 0x0215;  // flag this as an iBeacon - 21 bytes of data follow

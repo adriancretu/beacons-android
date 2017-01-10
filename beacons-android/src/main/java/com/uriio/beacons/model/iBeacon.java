@@ -50,11 +50,6 @@ public class iBeacon extends Beacon {
         this(uuid, major, minor, null);
     }
 
-    @Override
-    public int getType() {
-        return IBEACON;
-    }
-
     private void init(byte[] uuid, int major, int minor) {
         mUuid = null != uuid && 16 == uuid.length ? uuid : new byte[16];
         mMajor = major;
@@ -63,8 +58,8 @@ public class iBeacon extends Beacon {
 
     @Override
     public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
-        return setAdvertiser(new iBeaconAdvertiser(advertisersManager, getAdvertiseMode(), getTxPowerLevel(),
-                mUuid, mMajor, mMinor, getFlags(), isConnectable()));
+        return new iBeaconAdvertiser(advertisersManager, getAdvertiseMode(), getTxPowerLevel(),
+                mUuid, mMajor, mMinor, getFlags(), isConnectable());
     }
 
     @Override
@@ -93,8 +88,8 @@ public class iBeacon extends Beacon {
         return new iBeaconEditor();
     }
 
-    public class iBeaconEditor extends Editor {
-        public Editor setIndicators(byte[] uuid, int major, int minor) {
+    public class iBeaconEditor extends BaseEditor {
+        public BaseEditor setIndicators(byte[] uuid, int major, int minor) {
             if (major != mMajor || minor != mMinor || !Arrays.equals(mUuid, uuid)) {
                 init(uuid, major, minor);
                 mRestartBeacon = true;

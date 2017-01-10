@@ -1,9 +1,11 @@
 package com.uriio.beacons.ble.gatt;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.le.AdvertiseSettings;
 import android.util.Base64;
 
 import com.uriio.beacons.BuildConfig;
+import com.uriio.beacons.Storage;
 import com.uriio.beacons.Util;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
@@ -48,9 +50,9 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
         // use either the currently altered beacon, or the original one
         EddystoneBase beacon = getModifiedOrOriginalBeacon();
 
-        if (beacon.getType() == Beacon.EDDYSTONE_EID) {
+        if (beacon.getKind() == Storage.KIND_EDDYSTONE_EID) {
             EddystoneEID eddystoneEID = (EddystoneEID) this.mConfiguredBeacon;
-            EddystoneAdvertiser advertiser = eddystoneEID.createAdvertiser(null);
+            EddystoneAdvertiser advertiser = (EddystoneAdvertiser) eddystoneEID.recreateAdvertiser(null);
             if (null == advertiser) {
                 return new byte[0];
             }
@@ -65,7 +67,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
             return buffer.array();
         }
 
-        EddystoneAdvertiser advertiser = (EddystoneAdvertiser) beacon.createAdvertiser(null);
+        EddystoneAdvertiser advertiser = (EddystoneAdvertiser) beacon.recreateAdvertiser(null);
         return null == advertiser ? new byte[0] : advertiser.getServiceData();
     }
 
@@ -73,7 +75,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     public void advertiseURL(String url) {
         EddystoneBase beacon = getModifiedOrOriginalBeacon();
 
-        boolean sameType = beacon.getType() == Beacon.EDDYSTONE_URL;
+        boolean sameType = beacon.getKind() == Storage.KIND_EDDYSTONE_URL;
         boolean changed = !sameType;
         if (sameType) {
             String currentUrl = ((EddystoneURL) beacon).getURL();
@@ -96,7 +98,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     public void advertiseUID(byte[] namespaceInstance) {
         EddystoneBase beacon = getModifiedOrOriginalBeacon();
 
-        boolean sameType = beacon.getType() == Beacon.EDDYSTONE_UID;
+        boolean sameType = beacon.getKind() == Storage.KIND_EDDYSTONE_UID;
         boolean changed = !sameType;
         if (sameType) {
             byte[] current = ((EddystoneUID) beacon).getNamespaceInstance();
@@ -104,7 +106,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
         }
 
         if (changed) {
-            if (null == mConfiguredBeacon || beacon.getType() != Beacon.EDDYSTONE_UID) {
+            if (null == mConfiguredBeacon || beacon.getKind() != Storage.KIND_EDDYSTONE_UID) {
                 mConfiguredBeacon = new EddystoneUID(0, namespaceInstance, null, beacon.getLockKey(),
                         beacon.getAdvertiseMode(), beacon.getTxPowerLevel(), beacon.getName());
             } else {
@@ -119,7 +121,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     public void advertiseEID(byte[] identityKey, byte rotationExponent) {
         EddystoneBase beacon = getModifiedOrOriginalBeacon();
 
-        boolean sameType = beacon.getType() == Beacon.EDDYSTONE_EID;
+        boolean sameType = beacon.getKind() == Storage.KIND_EDDYSTONE_EID;
         boolean changed = !sameType;
         if (sameType) {
             EddystoneEID eidBeacon = (EddystoneEID) beacon;
@@ -175,7 +177,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     @Override
     public byte[] getEidIdentityKey() {
         EddystoneBase beacon = getModifiedOrOriginalBeacon();
-        if (beacon.getType() ==  Beacon.EDDYSTONE_EID) {
+        if (beacon.getKind() ==  Storage.KIND_EDDYSTONE_EID) {
             return ((EddystoneEID) beacon).getIdentityKey();
         }
         return null;
@@ -201,6 +203,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
         return txPowers[txPowerLevel];
     }
 
+    @SuppressLint("InlinedApi")
     @Override
     public int setAdvertiseInterval(int advertiseIntervalMs) {
         Util.log(TAG, "setAdvertiseInterval() called with: advertiseIntervalMs = [" + advertiseIntervalMs + "]");

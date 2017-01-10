@@ -1,5 +1,7 @@
 apply plugin: 'com.android.library'
 
+def PUBLISH_VERSION = '1.5.0'
+
 android {
     compileSdkVersion 25
     buildToolsVersion "25.0.2"
@@ -7,8 +9,9 @@ android {
     defaultConfig {
         minSdkVersion 9
         targetSdkVersion 25
-        versionCode 1
-        versionName "1.0"
+        versionName PUBLISH_VERSION
+        // versionCode not relevant for library projects
+        // versionCode 1
     }
     buildTypes {
         release {
@@ -42,79 +45,9 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
 
     compile 'com.android.support:appcompat-v7:25.1.0'
-    compile 'org.whispersystems:curve25519-android:0.2.5'
+    compile 'org.whispersystems:curve25519-android:0.3.0'
 
     testCompile 'junit:junit:4.12'
 }
 
-apply plugin: 'maven'
-apply plugin: 'signing'
-
-task javadocsJar(type: Jar, dependsOn: generateReleaseJavadoc) {
-    classifier = 'javadoc'
-    from generateReleaseJavadoc.destinationDir
-    // options.encoding = 'UTF-8'
-}
-
-task sourcesJar(type: Jar) {
-    classifier = 'sources'
-    from android.sourceSets.main.java.srcDirs
-}
-
-artifacts {
-    archives sourcesJar
-    archives javadocsJar
-}
-
-signing {
-    sign configurations.archives
-}
-
-if (ossrhUsername) uploadArchives {
-    repositories {
-        mavenDeployer {
-            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-
-            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
-                authentication(userName: ossrhUsername, password: ossrhPassword)
-            }
-
-            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
-                authentication(userName: ossrhUsername, password: ossrhPassword)
-            }
-
-            pom.project {
-                name 'com.uriio:beacons-android'
-                packaging 'aar'
-
-                groupId 'com.uriio'
-                artifactId 'beacons-android'
-                version PUBLISH_VERSION
-
-                description 'Android BLE beacons advertising library'
-                url 'https://github.com/uriio/beacons-android'
-
-                scm {
-                    connection 'scm:git:git@github.com:uriio/beacons-android.git'
-                    developerConnection 'scm:git:git@github.com:uriio/beacons-android.git'
-                    url 'git@github.com:uriio/beacons-android.git'
-                }
-
-                licenses {
-                    license {
-                        name 'The Apache License, Version 2.0'
-                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id 'adriancretu'
-                        name 'Adrian Cretu'
-                        email 'numedecod@gmail.com'
-                    }
-                }
-            }
-        }
-    }
-}
+if (project.hasProperty('ossrhUsername')) apply from: 'deploy.gradle'

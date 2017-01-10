@@ -1,5 +1,7 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.Storage;
+import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
 import com.uriio.beacons.eid.EIDUtils;
@@ -29,7 +31,7 @@ public class EddystoneEID extends EddystoneBase {
                         byte[] lockKey,
                         @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(storageId, EDDYSTONE_EID, lockKey, mode, txPowerLevel, name);
+        super(storageId, lockKey, mode, txPowerLevel, name);
         init(identityKey, rotationExponent, timeOffset);
     }
 
@@ -58,7 +60,7 @@ public class EddystoneEID extends EddystoneBase {
     }
 
     public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, byte[] lockKey, String name) {
-        super(EDDYSTONE_EID, lockKey, name);
+        super(lockKey, name);
         init(identityKey, rotationExponent, timeOffset);
     }
 
@@ -75,18 +77,18 @@ public class EddystoneEID extends EddystoneBase {
     }
 
     @Override
+    public int getKind() {
+        return Storage.KIND_EDDYSTONE_EID;
+    }
+
+    @Override
     public EddystoneBase cloneBeacon() {
         return new EddystoneEID(getIdentityKey(), getRotationExponent(), getClockOffset(),
                 getLockKey(), getAdvertiseMode(), getTxPowerLevel(), getName());
     }
 
     @Override
-    public int getType() {
-        return EDDYSTONE_EID;
-    }
-
-    @Override
-    public EddystoneAdvertiser createAdvertiser(AdvertisersManager advertisersManager) {
+    protected Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
         // add time offset to current time
         int timeCounter = getEidClock();
         byte[] data;
@@ -101,11 +103,8 @@ public class EddystoneEID extends EddystoneBase {
         mExpireTime = ((timeCounter >> mRotationExponent) + 1 << mRotationExponent) - mClockOffset;
         mExpireTime *= 1000;
 
-        EddystoneAdvertiser beacon = new EddystoneAdvertiser(data, 0, 8, advertisersManager,
-                getAdvertiseMode(), getTxPowerLevel(), isConnectable(), getFlags());
-        setAdvertiser(beacon);
-
-        return beacon;
+        return new EddystoneAdvertiser(EddystoneAdvertiser.FRAME_EID,
+                data, 0, 8, advertisersManager, getAdvertiseMode(), getTxPowerLevel(), isConnectable());
     }
 
     @Override

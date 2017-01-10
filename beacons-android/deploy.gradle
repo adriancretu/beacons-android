@@ -1,0 +1,71 @@
+apply plugin: 'maven'
+apply plugin: 'signing'
+
+task javadocsJar(type: Jar, dependsOn: generateReleaseJavadoc) {
+    classifier = 'javadoc'
+    from generateReleaseJavadoc.destinationDir
+    // options.encoding = 'UTF-8'
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from android.sourceSets.main.java.srcDirs
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocsJar
+}
+
+signing {
+    sign configurations.archives
+}
+
+if (ossrhUsername) uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: uploadRepoUrl) {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            snapshotRepository(url: snapshotRepoUrl) {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            pom.project {
+                name 'com.uriio:beacons-android'
+                packaging 'aar'
+
+                groupId 'com.uriio'
+                artifactId 'beacons-android'
+                version android.defaultConfig.versionName
+
+                description 'Android BLE beacons advertising library'
+                url 'https://github.com/uriio/beacons-android'
+
+                scm {
+                    connection 'scm:git:git@github.com:uriio/beacons-android.git'
+                    developerConnection 'scm:git:git@github.com:uriio/beacons-android.git'
+                    url 'git@github.com:uriio/beacons-android.git'
+                }
+
+                licenses {
+                    license {
+                        name 'The Apache License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id developerId
+                        name developerName
+                        email developerEmail
+                    }
+                }
+            }
+        }
+    }
+}

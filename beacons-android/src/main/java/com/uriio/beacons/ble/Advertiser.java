@@ -6,9 +6,13 @@ import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.AdvertiseSettings;
 import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.os.Build;
+import android.os.ParcelUuid;
+import android.support.annotation.NonNull;
 
 import com.uriio.beacons.Util;
 import com.uriio.beacons.model.Beacon;
+
+import java.util.UUID;
 
 /** Base class for BLE advertisers. */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
@@ -25,6 +29,16 @@ public abstract class Advertiser extends AdvertiseCallback {
 
     private AdvertiseSettings mSettingsInEffect = null;
     private int mStatus = STATUS_WAITING;
+
+    /**
+     * Creates a ParcelUUID for a 16-bit or 32-bit short UUID
+     * @param serviceId    Short UUID, either 16 or 32-bit
+     * @return             The corresponding 128-bit parcelled UUID
+     */
+    @NonNull
+    public static ParcelUuid parcelUuidFromShortUUID(long serviceId) {
+        return new ParcelUuid(new UUID(0x1000 | (serviceId << 32), 0x800000805F9B34FBL));
+    }
 
     public Advertiser(AdvertisersManager advertiseManager,
                       @Beacon.AdvertiseMode int advertiseMode,
@@ -65,6 +79,10 @@ public abstract class Advertiser extends AdvertiseCallback {
     public abstract AdvertiseData getAdvertiseData();
 
     public AdvertiseData getAdvertiseScanResponse() {
+        return null;
+    }
+
+    public String getAdvertisedLocalName() {
         return null;
     }
 

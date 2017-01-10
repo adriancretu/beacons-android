@@ -1,3 +1,12 @@
+### 1.5.0 (January 10, 2017)
+* Updated storage layer to use a single table for keeping all beacon kinds
+* Support for external beacon kinds (declared in app manifest so they can be loaded on boot / service restarts)
+* Added generic BLE advertiser that accepts supported Android data types needed for advertising.
+* Check explicitly for Lollipop when trying to start a beacon, to avoid crashes due to missing API calls
+* Set beacon state to **paused** when it fails to advertise
+* Add permission removal directives to manifest for a few automatically added sesnsitive permissions
+* Moved UriIO custom dynamic beacon kind to the UriIO client library, where it always belonged
+
 ### 1.4.4 (January 2, 2017)
 * Fix crash when Eddystone-URL has no payload
 * Update and fix build environment if OSS repository default credentials don't exist

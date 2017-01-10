@@ -1,5 +1,6 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
@@ -22,7 +23,7 @@ public class EddystoneUID extends EddystoneBase {
     public EddystoneUID(long storageId, byte[] namespaceInstance, String domainHint, byte[] lockKey,
                         @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(storageId, EDDYSTONE_UID, lockKey, mode, txPowerLevel, name);
+        super(storageId, lockKey, mode, txPowerLevel, name);
 
         mNamespaceInstance = null != namespaceInstance ? namespaceInstance : new byte[16];
         mDomainHint = domainHint;
@@ -47,14 +48,18 @@ public class EddystoneUID extends EddystoneBase {
     }
 
     public EddystoneUID(byte[] namespaceInstance, String domainHint, byte[] lockKey, String name) {
-        super(EDDYSTONE_UID, lockKey, name);
+        super(lockKey, name);
 
         mNamespaceInstance = null != namespaceInstance ? namespaceInstance : new byte[16];
         mDomainHint = domainHint;
     }
 
+    public EddystoneUID(byte[] namespaceInstance, String domainHint, byte[] lockKey) {
+        this(namespaceInstance, domainHint, lockKey, null);
+    }
+
     public EddystoneUID(byte[] namespaceInstance, byte[] lockKey) {
-        this(namespaceInstance, null, lockKey, null);
+        this(namespaceInstance, null, lockKey);
     }
 
     public EddystoneUID(byte[] namespaceInstance, String name) {
@@ -73,20 +78,21 @@ public class EddystoneUID extends EddystoneBase {
     }
 
     @Override
+    public int getKind() {
+        return Storage.KIND_EDDYSTONE_UID;
+    }
+
+    @Override
     public EddystoneBase cloneBeacon() {
         return new EddystoneUID(0, getNamespaceInstance(), getDomainHint(), getLockKey(),
                 getAdvertiseMode(), getTxPowerLevel(), getName());
     }
 
     @Override
-    public int getType() {
-        return EDDYSTONE_UID;
-    }
-
-    @Override
     public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
-        return setAdvertiser(new EddystoneAdvertiser(mNamespaceInstance, 0, 16, advertisersManager,
-                getAdvertiseMode(), getTxPowerLevel(), isConnectable(), getFlags()));
+        return new EddystoneAdvertiser(EddystoneAdvertiser.FRAME_UID,
+                mNamespaceInstance, 0, 16, advertisersManager,
+                getAdvertiseMode(), getTxPowerLevel(), isConnectable());
     }
 
     public String getDomainHint() {

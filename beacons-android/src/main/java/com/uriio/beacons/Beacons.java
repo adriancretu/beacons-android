@@ -3,6 +3,7 @@ package com.uriio.beacons;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
+import android.os.Build;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
@@ -75,13 +76,13 @@ public class Beacons {
             _instance.mInitialized = true;
 
             // restore active items
-            Cursor cursor = Storage.getInstance().getAllItems(false);
+            Cursor cursor = Storage.getInstance().queryAll(false);
             while (cursor.moveToNext()) {
-                Beacon item = Storage.itemFromCursor(cursor);
+                Beacon item = Storage.fromCursor(cursor);
                 getActive().add(item);
             }
 
-            if (cursor.getCount() > 0) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && cursor.getCount() > 0) {
                 // start the BLE service
                 context.startService(new Intent(context, BleService.class));
             }
@@ -153,9 +154,9 @@ public class Beacons {
     private static Beacon loadItem(long storageId) {
         Beacon beacon = null;
 
-        Cursor cursor = Storage.getInstance().getItem(storageId);
+        Cursor cursor = Storage.getInstance().query(storageId);
         if (cursor.moveToNext()) {
-            beacon = Storage.itemFromCursor(cursor);
+            beacon = Storage.fromCursor(cursor);
         }
         cursor.close();
 
@@ -173,7 +174,7 @@ public class Beacons {
     }
 
     public static Cursor getStopped() {
-        return Storage.getInstance().getAllItems(true);
+        return Storage.getInstance().queryAll(true);
     }
 
     public static Context getContext() {

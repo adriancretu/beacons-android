@@ -1,7 +1,5 @@
 package com.uriio.beacons.model;
 
-import com.uriio.beacons.Storage;
-
 import java.security.SecureRandom;
 
 /**
@@ -11,16 +9,16 @@ import java.security.SecureRandom;
 public abstract class EddystoneBase extends Beacon {
     private byte[] mLockKey;
 
-    public EddystoneBase(long storageId, int frameType, byte[] lockKey,
+    public EddystoneBase(long storageId, byte[] lockKey,
                          @AdvertiseMode int advertiseMode,
                          @AdvertiseTxPower int txPowerLevel,
                          String name) {
-        super(storageId, advertiseMode, txPowerLevel, frameType << 4, name);
+        super(storageId, advertiseMode, txPowerLevel, 0, name);
         init(lockKey);
     }
 
-    public EddystoneBase(int frameType, byte[] lockKey, String name) {
-        super(frameType << 4, name);
+    public EddystoneBase(byte[] lockKey, String name) {
+        super(0, name);
         init(lockKey);
     }
 
@@ -30,11 +28,6 @@ public abstract class EddystoneBase extends Beacon {
             new SecureRandom().nextBytes(lockKey);
         }
         mLockKey = lockKey;
-    }
-
-    @Override
-    public int getKind() {
-        return Storage.KIND_EDDYSTONE;
     }
 
     /**
@@ -52,11 +45,11 @@ public abstract class EddystoneBase extends Beacon {
         return new EddystoneEditor();
     }
 
-    public class EddystoneEditor extends Editor {
+    public class EddystoneEditor extends BaseEditor {
         /**
          * Changes the Beacon Lock Key, to be used when configuring the beacon via GATT.
          * @param lockKey    The new Lock Key, as a 16-byte array
-         * @return The Editor instance, for call chaining.
+         * @return The editor instance, for call chaining.
          */
         public EddystoneEditor setLockKey(byte[] lockKey) {
             mLockKey = lockKey;

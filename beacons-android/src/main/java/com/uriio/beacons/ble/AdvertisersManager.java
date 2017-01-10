@@ -4,7 +4,6 @@ import android.annotation.TargetApi;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.AdvertiseCallback;
-import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.os.Build;
 
@@ -19,7 +18,6 @@ import java.util.List;
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class AdvertisersManager {
     public interface BLEListener {
-        void onBLEAdvertiseNotSupported();
         void onBLEAdvertiseStarted(Advertiser advertiser);
         void onBLEAdvertiseFailed(Advertiser advertiser, int errorCode);
     }
@@ -64,24 +62,27 @@ public class AdvertisersManager {
             }
         }
 
-        // fix device name so it fits into the scan record
+        // temporarily change local device name if it will be used in BLE payload
         String oldAdapterName = null;
-        int maxNameLen = 8 + 3;  // borrow 3 bytes from TX field
-        AdvertiseData scanResponse = advertiser.getAdvertiseScanResponse();
-        if (null != scanResponse && scanResponse.getIncludeDeviceName()) {
+        String tempLocalName = advertiser.getAdvertisedLocalName();
+        if (null != tempLocalName) {
             oldAdapterName = mBluetoothAdapter.getName();
-            if (null != oldAdapterName && oldAdapterName.getBytes().length > maxNameLen) {
-                // beware - changes the name at OS level!
-                mBluetoothAdapter.setName(Build.MODEL.length() <= maxNameLen ? Build.MODEL : Build.MODEL.substring(0, maxNameLen));
+            if (tempLocalName.equals(oldAdapterName)) {
+                // same name already, don't change it
+                tempLocalName = null;
             }
-            else oldAdapterName = null;
+            if (null != tempLocalName) {
+                // changes the name at OS level!
+                mBluetoothAdapter.setName(tempLocalName);
+            }
         }
 
         advertiser.startAdvertising(mBleAdvertiser);
 
-        if (null != oldAdapterName) {
+        if (null != tempLocalName) {
             mBluetoothAdapter.setName(oldAdapterName);
         }
+
         return true;
     }
 
@@ -139,7 +140,6 @@ public class AdvertisersManager {
         }
 
         if (!mBluetoothAdapter.isMultipleAdvertisementSupported()) {
-            mListener.onBLEAdvertiseNotSupported();
             return false;
         }
 

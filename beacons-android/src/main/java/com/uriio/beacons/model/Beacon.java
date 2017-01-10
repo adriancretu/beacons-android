@@ -1,10 +1,12 @@
 package com.uriio.beacons.model;
 
+import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.PendingIntent;
 import android.bluetooth.le.AdvertiseSettings;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.os.Build;
 import android.support.annotation.IntDef;
 import android.support.v4.content.LocalBroadcastManager;
@@ -42,15 +44,10 @@ public abstract class Beacon {
     public static final int ADVERTISE_RUNNING       = 1;
     public static final int ADVERTISE_NO_BLUETOOTH  = 2;
 
-    // Eddystone types match to stored frame types - do not modify
-    public static final int EDDYSTONE_URL = 0;
-    public static final int EDDYSTONE_UID = 1;
-    public static final int EDDYSTONE_EID = 2;
-
-    public static final int IBEACON       = 3;
-    public static final int EPHEMERAL_URL = 4;
-
+    @SuppressLint("InlinedApi")
     private static final int DEFAULT_ADVERTISE_MODE = AdvertiseSettings.ADVERTISE_MODE_BALANCED;
+
+    @SuppressLint("InlinedApi")
     private static final int DEFAULT_ADVERTISE_TX_POWER = AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM;
 
     /** Associated BLE object, if any. **/
@@ -85,20 +82,21 @@ public abstract class Beacon {
     private boolean mConnectable = false;
     private String mError;
 
-    /*
-    * @param mode                 BLE mode
-    * @param txPowerLevel         BLE TX power level
-    * @param mName                 Optional mName
-    */
+    public static Beacon fromCursor(Cursor cursor) {
+        return Storage.fromCursor(cursor);
+    }
+
+    /**
+     * Constructs a beacon container.
+     * @param advertiseMode        BLE advertising mode
+     * @param txPowerLevel         BLE Transmit power level
+     * @param name                 An optional name. Not used in actual BLE packets.
+     */
     public Beacon(long storageId,
                   @AdvertiseMode int advertiseMode,
                   @AdvertiseTxPower int txPowerLevel, int flags, String name) {
-        mStorageId = storageId;
-        mFlags = flags;
-        mAdvertiseMode = advertiseMode;
-        mTxPowerLevel = txPowerLevel;
-        mName = name;
         mUUID = UUID.randomUUID();
+        init(storageId, advertiseMode, txPowerLevel, flags, name);
     }
 
     public Beacon(@AdvertiseMode int advertiseMode,
@@ -119,6 +117,23 @@ public abstract class Beacon {
         this(flags, null);
     }
 
+    public Beacon() {
+        this(0);
+    }
+
+    /**
+     * Sets some basic properties. Should only be called immediately after creation, and before save().
+     */
+    public void init(long storageId,
+                     @AdvertiseMode int advertiseMode,
+                     @AdvertiseTxPower int txPowerLevel, int flags, String name) {
+        mStorageId = storageId;
+        mFlags = flags;
+        mAdvertiseMode = advertiseMode;
+        mTxPowerLevel = txPowerLevel;
+        mName = name;
+    }
+
     /**
      * Saves this beacon to persistent storage and optionally starts advertising.
      * @param startAdvertising    Enables the beacon to advertise, if not started already.
@@ -128,19 +143,7 @@ public abstract class Beacon {
         // don't save an already persisted beacon
         if (getSavedId() > 0) return this;
 
-        switch (getType()) {
-            case EDDYSTONE_URL:
-            case EDDYSTONE_UID:
-            case EDDYSTONE_EID:
-                Storage.getInstance().insertEddystoneItem((EddystoneBase) this);
-                break;
-            case EPHEMERAL_URL:
-                Storage.getInstance().insertUriioItem((EphemeralURL) this);
-                break;
-            case IBEACON:
-                Storage.getInstance().insertAppleBeaconItem((iBeacon) this);
-                break;
-        }
+        Storage.getInstance().insert(this);
 
         if (startAdvertising) {
             start();
@@ -159,7 +162,7 @@ public abstract class Beacon {
 
     private void onEditDone(boolean needRestart) {
         if (getSavedId() > 0) {
-            Storage.getInstance().saveExisting(this);
+            Storage.getInstance().update(this);
         }
 
         if (needRestart) {
@@ -179,6 +182,11 @@ public abstract class Beacon {
      * @return True on success. Note that the actual advertising may fail later, this call only transitions the beacon into enabled state.
      */
     public boolean start() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            // can't advertise below L
+            return false;
+        }
+
         if (Beacons.getActive().size() == 0) {
             Context context = Beacons.getContext();
             if (null == context) return false;
@@ -196,7 +204,9 @@ public abstract class Beacon {
             setState(ACTIVE_STATE_STOPPED, false);
         }
 
-        if (getSavedId() > 0) Storage.getInstance().deleteItem(getSavedId());
+        if (getSavedId() > 0) {
+            Storage.getInstance().delete(this);
+        }
     }
 
     public void pause() {
@@ -230,8 +240,8 @@ public abstract class Beacon {
         if (state != targetBeacon.getActiveState()) {
             // item changed state
             targetBeacon.setActiveState(state);
-            if (persist) {
-                Storage.getInstance().updateBeaconState(targetBeacon, state);
+            if (persist && targetBeacon.getSavedId() > 0) {
+                Storage.getInstance().updateState(targetBeacon, state);
             }
 
             sendStateBroadcast(targetBeacon);
@@ -291,11 +301,6 @@ public abstract class Beacon {
         return mAdvertiser;
     }
 
-    Advertiser setAdvertiser(Advertiser advertiser) {
-        mAdvertiser = advertiser;
-        return advertiser;
-    }
-
     @AdvertiseMode
     public int getAdvertiseMode() {
         return mAdvertiseMode;
@@ -318,11 +323,14 @@ public abstract class Beacon {
         mAdvertiseState = status;
     }
 
-    public abstract Advertiser createAdvertiser(AdvertisersManager advertisersManager);
+    public Advertiser recreateAdvertiser(AdvertisersManager advertisersManager) {
+        mAdvertiser = createAdvertiser(advertisersManager);
+        return mAdvertiser;
+    }
+
+    protected abstract Advertiser createAdvertiser(AdvertisersManager advertisersManager);
 
     public abstract int getKind();
-
-    abstract public int getType();
 
     /**
      * Descriptive name. Not used for BLE advertising purposes.
@@ -354,8 +362,8 @@ public abstract class Beacon {
         return mConnectable;
     }
 
-    public Editor edit() {
-        return new Editor();
+    public BaseEditor edit() {
+        return new BaseEditor();
     }
 
     /**
@@ -402,10 +410,10 @@ public abstract class Beacon {
     })
     public @interface AdvertiseTxPower {}
 
-    public class Editor<T> {
+    public class BaseEditor<T> {
         protected boolean mRestartBeacon = false;
 
-        public Editor<T> setAdvertiseMode(@AdvertiseMode int mode) {
+        public BaseEditor<T> setAdvertiseMode(@AdvertiseMode int mode) {
             if (mode != mAdvertiseMode) {
                 mAdvertiseMode = mode;
                 mRestartBeacon = true;
@@ -413,7 +421,7 @@ public abstract class Beacon {
             return this;
         }
 
-        public Editor<T> setAdvertiseTxPower(@AdvertiseTxPower int txPowerLevel) {
+        public BaseEditor<T> setAdvertiseTxPower(@AdvertiseTxPower int txPowerLevel) {
             if (txPowerLevel != mTxPowerLevel) {
                 mTxPowerLevel = txPowerLevel;
                 mRestartBeacon = true;
@@ -421,7 +429,7 @@ public abstract class Beacon {
             return this;
         }
 
-        public Editor<T> setConnectable(boolean connectable) {
+        public BaseEditor<T> setConnectable(boolean connectable) {
             if (connectable != mConnectable) {
                 mConnectable = connectable;
                 mRestartBeacon = true;
@@ -429,15 +437,14 @@ public abstract class Beacon {
             return this;
         }
 
-        public Editor<T> setName(String name) {
+        public BaseEditor<T> setName(String name) {
             if (null == name || null == mName || !name.equals(mName)) {
                 mName = name;
             }
             return this;
         }
 
-        // internal use - sets custom beacon modifier flags to alter advertised data or behaviour
-        protected Editor<T> setFlags(int flags) {
+        public BaseEditor<T> setFlags(int flags) {
             if (mFlags != flags) {
                 mFlags = flags;
                 mRestartBeacon = true;  // ?...

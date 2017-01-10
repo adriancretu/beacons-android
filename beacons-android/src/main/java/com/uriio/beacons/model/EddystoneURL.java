@@ -1,5 +1,6 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
@@ -14,7 +15,7 @@ public class EddystoneURL extends EddystoneBase {
 
     public EddystoneURL(long storageId, String url, byte[] lockKey, @Beacon.AdvertiseMode int mode,
                         @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(storageId, EDDYSTONE_URL, lockKey, mode, txPowerLevel, name);
+        super(storageId, lockKey, mode, txPowerLevel, name);
         mURL = url;
     }
 
@@ -29,7 +30,7 @@ public class EddystoneURL extends EddystoneBase {
     }
 
     public EddystoneURL(String url, byte[] lockKey, String name) {
-        super(EDDYSTONE_URL, lockKey, name);
+        super(lockKey, name);
         mURL = url;
     }
 
@@ -46,13 +47,13 @@ public class EddystoneURL extends EddystoneBase {
     }
 
     @Override
-    public EddystoneBase cloneBeacon() {
-        return new EddystoneURL(0, getURL(), getLockKey(), getAdvertiseMode(), getTxPowerLevel(), getName());
+    public int getKind() {
+        return Storage.KIND_EDDYSTONE_URL;
     }
 
     @Override
-    public int getType() {
-        return EDDYSTONE_URL;
+    public EddystoneBase cloneBeacon() {
+        return new EddystoneURL(0, getURL(), getLockKey(), getAdvertiseMode(), getTxPowerLevel(), getName());
     }
 
     @Override
@@ -65,8 +66,9 @@ public class EddystoneURL extends EddystoneBase {
             return null;
         }
 
-        return setAdvertiser(new EddystoneAdvertiser(data, 0, data.length, advertisersManager,
-                getAdvertiseMode(), getTxPowerLevel(), isConnectable(), getFlags()));
+        return new EddystoneAdvertiser(EddystoneAdvertiser.FRAME_URL,
+                data, 0, data.length, advertisersManager,
+                getAdvertiseMode(), getTxPowerLevel(), isConnectable());
     }
 
     @Override

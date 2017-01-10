@@ -5,6 +5,8 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattServer;
 import android.bluetooth.BluetoothGattService;
+import android.os.Build;
+import android.support.annotation.RequiresApi;
 
 import com.uriio.beacons.Util;
 import com.uriio.beacons.eid.EIDUtils;
@@ -27,6 +29,7 @@ import javax.crypto.spec.SecretKeySpec;
 /**
  * Eddystone GATT Service
  */
+@RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
 public class EddystoneGattService {
     public static final UUID UUID_EDDYSTONE_GATT_SERVICE = UUID.fromString("a3c87500-8ed3-4bdf-8a39-a01bebede295");
 
@@ -192,7 +195,7 @@ public class EddystoneGattService {
     public void readCharacteristic(BluetoothGattServer gattServer, BluetoothDevice device,
                                    int requestId, int offset,
                                    BluetoothGattCharacteristic characteristic) {
-        UUID uuid = characteristic.getUuid();
+//        UUID uuid = characteristic.getUuid();
         int status =  BluetoothGatt.GATT_SUCCESS;
 
         if (isLocked()) {
@@ -240,7 +243,7 @@ public class EddystoneGattService {
     }
 
     public int writeCharacteristic(BluetoothDevice device, BluetoothGattCharacteristic characteristic, byte[] value) {
-        UUID uuid = characteristic.getUuid();
+//        UUID uuid = characteristic.getUuid();
         if (isLocked()) {
             if (characteristic == mUnlockCharacteristic) {
                 if (value.length == 16) {
