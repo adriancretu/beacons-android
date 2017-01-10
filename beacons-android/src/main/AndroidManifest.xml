@@ -1,10 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.uriio.beacons">
     <uses-permission android:name="android.permission.BLUETOOTH"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
 
     <!-- Needed for updating beacons if device is sleeping -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
+    <!-- Remove automatically added permissions caused by missing minSdk on curve25519 library -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
 
