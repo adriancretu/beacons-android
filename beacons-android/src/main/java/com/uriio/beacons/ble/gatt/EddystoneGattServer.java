@@ -125,7 +125,8 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
             mGattServer = null;
         }
 
-        if (null != mBeacon) {
+        // if BT was off when we tried to start, the configurator is null
+        if (null != mBeacon && null != mEddystoneConfigurator) {
             EddystoneBase configuredBeacon = mEddystoneConfigurator.getConfiguredBeacon();
 
             if (mBeacon == configuredBeacon) {
