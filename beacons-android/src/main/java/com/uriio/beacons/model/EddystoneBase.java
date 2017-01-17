@@ -1,5 +1,7 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.ble.Advertiser;
+
 import java.security.SecureRandom;
 
 /**
@@ -9,11 +11,11 @@ import java.security.SecureRandom;
 public abstract class EddystoneBase extends Beacon {
     private byte[] mLockKey;
 
-    public EddystoneBase(long storageId, byte[] lockKey,
-                         @AdvertiseMode int advertiseMode,
-                         @AdvertiseTxPower int txPowerLevel,
+    public EddystoneBase(byte[] lockKey,
+                         @Advertiser.Mode int advertiseMode,
+                         @Advertiser.Power int txPowerLevel,
                          String name) {
-        super(storageId, advertiseMode, txPowerLevel, 0, name);
+        super(advertiseMode, txPowerLevel, 0, name);
         init(lockKey);
     }
 

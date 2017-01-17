@@ -6,7 +6,6 @@ import android.os.Build;
 import android.os.ParcelUuid;
 
 import com.uriio.beacons.ble.gatt.EddystoneGattService;
-import com.uriio.beacons.model.Beacon;
 
 /**
 * Advertise as an Eddystone beacon
@@ -30,35 +29,28 @@ public class EddystoneAdvertiser extends Advertiser {
      * @param frameData              Frame data (without service data frame type or TX power bytes)
      * @param pos                    Frame data offset
      * @param len                    Frame data size
-     * @param advertisersManager     BLE Advertisers manager, or null for none.
-     * @param advertiseMode          BLE advertise mode
-     * @param txPowerLevel           BLE TX power level
      */
-    public EddystoneAdvertiser(byte frameType, byte[] frameData, int pos, int len,
-                               AdvertisersManager advertisersManager,
-                               @Beacon.AdvertiseMode int advertiseMode,
-                               @Beacon.AdvertiseTxPower int txPowerLevel,
-                               boolean connectable)
+    public EddystoneAdvertiser(SettingsProvider provider, byte frameType, byte[] frameData,
+                               int pos, int len)
     {
-        super(advertisersManager, advertiseMode, txPowerLevel, connectable);
-        byte txPower = AdvertisersManager.getZeroDistanceTxPower(txPowerLevel);
+        super(provider);
 
         mServiceData = new byte[2 + len];
 
         mServiceData[0] = frameType;
-
-        mServiceData[1] = txPower;
+        mServiceData[1] = FRAME_TLM == frameType ? 0
+                : AdvertisersManager.getZeroDistanceTxPower(provider.getTxPowerLevel());
         System.arraycopy(frameData, pos, mServiceData, 2, len);
 
         // an advertisement packet can have at most 31 bytes
         mAdvertiseData = new AdvertiseData.Builder()
-                .setIncludeTxPowerLevel(false)
                 .setIncludeDeviceName(false)
+                .setIncludeTxPowerLevel(false)
                 .addServiceData(EDDYSTONE_SERVICE_UUID, mServiceData)
                 .addServiceUuid(EDDYSTONE_SERVICE_UUID)
                 .build();
 
-        if (connectable) {
+        if (provider.isConnectable()) {
             mAdvertiseScanResponse = new AdvertiseData.Builder()
                     .setIncludeDeviceName(true)
                     .setIncludeTxPowerLevel(false)  // allows 3 more bytes for device name

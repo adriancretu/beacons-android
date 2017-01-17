@@ -46,6 +46,8 @@ public interface EddystoneGattConfigCallback {
      */
     void advertiseEID(byte[] identityKey, byte rotationExponent);
 
+    void advertiseTLM();
+
     /**
      * Called when configured to an empty advertise data, or factory reset.
      */

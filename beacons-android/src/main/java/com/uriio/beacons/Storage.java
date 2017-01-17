@@ -12,9 +12,11 @@ import android.support.annotation.NonNull;
 import android.util.Base64;
 import android.util.SparseArray;
 
+import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.model.Beacon;
 import com.uriio.beacons.model.EddystoneBase;
 import com.uriio.beacons.model.EddystoneEID;
+import com.uriio.beacons.model.EddystoneTLM;
 import com.uriio.beacons.model.EddystoneUID;
 import com.uriio.beacons.model.EddystoneURL;
 import com.uriio.beacons.model.iBeacon;
@@ -69,6 +71,7 @@ public class Storage extends SQLiteOpenHelper {
     public static final int KIND_EDDYSTONE_UID = 2;
     public static final int KIND_IBEACON       = 3;
     public static final int KIND_EDDYSTONE_EID = 4;
+    public static final int KIND_EDDYSTONE_TLM = 5;
 
     private static final String ITEMS_TABLE     = "b";
     @Deprecated private static final String EDDYSTONE_TABLE = "url";
@@ -233,6 +236,7 @@ public class Storage extends SQLiteOpenHelper {
             case KIND_EDDYSTONE_URL:
             case KIND_EDDYSTONE_UID:
             case KIND_EDDYSTONE_EID:
+            case KIND_EDDYSTONE_TLM:
                 bindInsertEddystoneItem((EddystoneBase) item);
                 break;
             case KIND_IBEACON:
@@ -275,6 +279,9 @@ public class Storage extends SQLiteOpenHelper {
                 mInsertItemStmt.bindBlob(2, ((EddystoneEID) beacon).getIdentityKey());
                 mInsertItemStmt.bindLong(3, ((EddystoneEID) beacon).getRotationExponent());
                 mInsertItemStmt.bindLong(4, ((EddystoneEID) beacon).getClockOffset());
+                break;
+            case KIND_EDDYSTONE_TLM:
+                mInsertItemStmt.bindLong(2, ((EddystoneTLM) beacon).getRefreshInterval());
                 break;
         }
     }
@@ -331,8 +338,8 @@ public class Storage extends SQLiteOpenHelper {
         Beacon beacon;
 
         long itemId = cursor.getLong(7);
-        @Beacon.AdvertiseMode int advertiseMode = cursor.getInt(9);
-        @Beacon.AdvertiseTxPower int txPowerLevel = cursor.getInt(10);
+        @Advertiser.Mode int advertiseMode = cursor.getInt(9);
+        @Advertiser.Power int txPowerLevel = cursor.getInt(10);
         int flags = cursor.getInt(11);
         int kind = cursor.getInt(12);
         String name = cursor.getString(13);
@@ -350,9 +357,11 @@ public class Storage extends SQLiteOpenHelper {
                 beacon = new EddystoneEID(cursor.getBlob(1), (byte) cursor.getInt(2), cursor.getInt(3),
                         cursor.isNull(0) ? null : cursor.getBlob(0));
                 break;
+            case KIND_EDDYSTONE_TLM:
+                beacon = new EddystoneTLM(cursor.getInt(1), cursor.isNull(0) ? null : cursor.getBlob(0));
+                break;
             case KIND_IBEACON:
-                beacon = new iBeacon(itemId, cursor.getBlob(0), cursor.getInt(1), cursor.getInt(2),
-                        advertiseMode, txPowerLevel, flags, name);
+                beacon = new iBeacon(cursor.getBlob(0), cursor.getInt(1), cursor.getInt(2));
                 break;
             default:
                 Persistable persistable = null == getInstance().mBeaconPersisters ? null : getInstance().mBeaconPersisters.get(kind);
@@ -399,6 +408,9 @@ public class Storage extends SQLiteOpenHelper {
                 mUpdateEddystoneStmt.bindLong(4, ((EddystoneEID) beacon).getRotationExponent());
                 mUpdateEddystoneStmt.bindLong(5, ((EddystoneEID) beacon).getClockOffset());
                 break;
+            case KIND_EDDYSTONE_TLM:
+                mUpdateEddystoneStmt.bindLong(3, ((EddystoneTLM) beacon).getRefreshInterval());
+                break;
         }
 
         return mUpdateEddystoneStmt;
@@ -437,6 +449,7 @@ public class Storage extends SQLiteOpenHelper {
             case KIND_EDDYSTONE_URL:
             case KIND_EDDYSTONE_UID:
             case KIND_EDDYSTONE_EID:
+            case KIND_EDDYSTONE_TLM:
                 updateStatement = prepareUpdateStatement((EddystoneBase) beacon, db);
                 break;
             case KIND_IBEACON:

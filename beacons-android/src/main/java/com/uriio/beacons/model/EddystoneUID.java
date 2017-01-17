@@ -1,8 +1,8 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.BleService;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.Advertiser;
-import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
 
 import java.util.Arrays;
@@ -20,31 +20,31 @@ public class EddystoneUID extends EddystoneBase {
      * @param domainHint           Optional domain name hinted as the source for namespace.
      *                             Setting this does not modify the namespace/instance.
      */
-    public EddystoneUID(long storageId, byte[] namespaceInstance, String domainHint, byte[] lockKey,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(storageId, lockKey, mode, txPowerLevel, name);
+    public EddystoneUID(byte[] namespaceInstance, String domainHint, byte[] lockKey,
+                        @Advertiser.Mode int mode,
+                        @Advertiser.Power int txPowerLevel, String name) {
+        super(lockKey, mode, txPowerLevel, name);
 
         mNamespaceInstance = null != namespaceInstance ? namespaceInstance : new byte[16];
         mDomainHint = domainHint;
     }
 
     public EddystoneUID(byte[] namespaceInstance, String domainHint,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        this(0, namespaceInstance, domainHint, null, mode, txPowerLevel, name);
+                        @Advertiser.Mode int mode,
+                        @Advertiser.Power int txPowerLevel, String name) {
+        this(namespaceInstance, domainHint, null, mode, txPowerLevel, name);
     }
 
     public EddystoneUID(byte[] namespaceInstance, String domainHint,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel) {
-        this(0, namespaceInstance, domainHint, null, mode, txPowerLevel, null);
+                        @Advertiser.Mode int mode,
+                        @Advertiser.Power int txPowerLevel) {
+        this(namespaceInstance, domainHint, null, mode, txPowerLevel, null);
     }
 
     public EddystoneUID(byte[] namespaceInstance,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel) {
-        this(0, namespaceInstance, null, null, mode, txPowerLevel, null);
+                        @Advertiser.Mode int mode,
+                        @Advertiser.Power int txPowerLevel) {
+        this(namespaceInstance, null, null, mode, txPowerLevel, null);
     }
 
     public EddystoneUID(byte[] namespaceInstance, String domainHint, byte[] lockKey, String name) {
@@ -84,15 +84,13 @@ public class EddystoneUID extends EddystoneBase {
 
     @Override
     public EddystoneBase cloneBeacon() {
-        return new EddystoneUID(0, getNamespaceInstance(), getDomainHint(), getLockKey(),
+        return new EddystoneUID(getNamespaceInstance(), getDomainHint(), getLockKey(),
                 getAdvertiseMode(), getTxPowerLevel(), getName());
     }
 
     @Override
-    public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
-        return new EddystoneAdvertiser(EddystoneAdvertiser.FRAME_UID,
-                mNamespaceInstance, 0, 16, advertisersManager,
-                getAdvertiseMode(), getTxPowerLevel(), isConnectable());
+    public Advertiser createAdvertiser(BleService service) {
+        return new EddystoneAdvertiser(this, EddystoneAdvertiser.FRAME_UID, mNamespaceInstance, 0, 16);
     }
 
     public String getDomainHint() {

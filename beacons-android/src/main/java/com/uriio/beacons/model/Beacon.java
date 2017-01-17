@@ -1,14 +1,13 @@
 package com.uriio.beacons.model;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.app.PendingIntent;
+import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseSettings;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.os.Build;
-import android.support.annotation.IntDef;
 import android.support.v4.content.LocalBroadcastManager;
 
 import com.uriio.beacons.Beacons;
@@ -16,16 +15,13 @@ import com.uriio.beacons.BleService;
 import com.uriio.beacons.Receiver;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.Advertiser;
-import com.uriio.beacons.ble.AdvertisersManager;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.util.UUID;
 
 /**
  * Base container for an item.
  */
-public abstract class Beacon {
+public abstract class Beacon implements Advertiser.SettingsProvider {
     /**
      * Beacon is active and enabled.
      */
@@ -80,7 +76,8 @@ public abstract class Beacon {
     private int mActiveState = ACTIVE_STATE_STOPPED;
 
     private boolean mConnectable = false;
-    private String mError;
+    private int mErrorCode;
+    private String mErrorDetsils;
 
     public static Beacon fromCursor(Cursor cursor) {
         return Storage.fromCursor(cursor);
@@ -92,25 +89,18 @@ public abstract class Beacon {
      * @param txPowerLevel         BLE Transmit power level
      * @param name                 An optional name. Not used in actual BLE packets.
      */
-    public Beacon(long storageId,
-                  @AdvertiseMode int advertiseMode,
-                  @AdvertiseTxPower int txPowerLevel, int flags, String name) {
+    public Beacon(@Advertiser.Mode int advertiseMode,
+                  @Advertiser.Power int txPowerLevel, int flags, String name) {
         mUUID = UUID.randomUUID();
-        init(storageId, advertiseMode, txPowerLevel, flags, name);
+        init(0, advertiseMode, txPowerLevel, flags, name);
     }
 
-    public Beacon(@AdvertiseMode int advertiseMode,
-                  @AdvertiseTxPower int txPowerLevel, int flags, String name) {
-        this(0, advertiseMode, txPowerLevel, flags, name);
-    }
-
-    public Beacon(@AdvertiseMode int advertiseMode,
-                  @AdvertiseTxPower int txPowerLevel, int flags) {
-        this(0, advertiseMode, txPowerLevel, flags, null);
+    public Beacon(@Advertiser.Mode int advertiseMode, @Advertiser.Power int txPowerLevel, int flags) {
+        this(advertiseMode, txPowerLevel, flags, null);
     }
 
     public Beacon(int flags, String name) {
-        this(0, DEFAULT_ADVERTISE_MODE, DEFAULT_ADVERTISE_TX_POWER, flags, name);
+        this(DEFAULT_ADVERTISE_MODE, DEFAULT_ADVERTISE_TX_POWER, flags, name);
     }
 
     public Beacon(int flags) {
@@ -125,8 +115,8 @@ public abstract class Beacon {
      * Sets some basic properties. Should only be called immediately after creation, and before save().
      */
     public void init(long storageId,
-                     @AdvertiseMode int advertiseMode,
-                     @AdvertiseTxPower int txPowerLevel, int flags, String name) {
+                     @Advertiser.Mode int advertiseMode,
+                     @Advertiser.Power int txPowerLevel, int flags, String name) {
         mStorageId = storageId;
         mFlags = flags;
         mAdvertiseMode = advertiseMode;
@@ -301,15 +291,31 @@ public abstract class Beacon {
         return mAdvertiser;
     }
 
-    @AdvertiseMode
+    // region Advertiser.SettingsProvider
+
+    @Override
+    @Advertiser.Mode
     public int getAdvertiseMode() {
         return mAdvertiseMode;
     }
 
-    @AdvertiseTxPower
+    @Override
+    @Advertiser.Power
     public int getTxPowerLevel() {
         return mTxPowerLevel;
     }
+
+    @Override
+    public int getTimeout() {
+        return 0;
+    }
+
+    @Override
+    public boolean isConnectable() {
+        return mConnectable;
+    }
+
+    // endregion
 
     public int getFlags() {
         return mFlags;
@@ -323,12 +329,14 @@ public abstract class Beacon {
         mAdvertiseState = status;
     }
 
-    public Advertiser recreateAdvertiser(AdvertisersManager advertisersManager) {
-        mAdvertiser = createAdvertiser(advertisersManager);
+    public Advertiser recreateAdvertiser(BleService bleService) {
+        mErrorCode = 0;
+        mErrorDetsils = null;
+        mAdvertiser = createAdvertiser(bleService);
         return mAdvertiser;
     }
 
-    protected abstract Advertiser createAdvertiser(AdvertisersManager advertisersManager);
+    protected abstract Advertiser createAdvertiser(BleService advertisersManager);
 
     public abstract int getKind();
 
@@ -339,9 +347,43 @@ public abstract class Beacon {
         return mName;
     }
 
-    // FIXME: 9/26/2016 is this used?
-    void clearAdvertiser() {
+    /**
+     * Called by the service when Bluetooth enters disabled state. Never call this directly.
+     */
+    public long onBluetoothOff() {
+        long pduCount = 0;
+        setAdvertiseState(ADVERTISE_NO_BLUETOOTH);
+        if (null != mAdvertiser) {
+            pduCount = mAdvertiser.clearPDUCount();
+        }
+
+        // do not attempt to re-use the same callback for future broadcasts
         mAdvertiser = null;
+
+        return pduCount;
+    }
+
+    public void onAdvertiseFailed(int errorCode) {
+        if (AdvertiseCallback.ADVERTISE_FAILED_TOO_MANY_ADVERTISERS == errorCode){
+            // user may attempt to start the beacon again when we get a free slot
+            pause();
+        }
+        else {
+            // fatal, no point in keeping the beacon in active state
+            stop();
+        }
+
+        mAdvertiser = null;
+        mErrorCode = errorCode;
+        setErrorDetails(Advertiser.getErrorName(errorCode));
+    }
+
+    public int getErrorCode() {
+        return mErrorCode;
+    }
+
+    public String getErrorDetsils() {
+        return mErrorDetsils;
     }
 
     public long getScheduledRefreshTime() {
@@ -356,10 +398,6 @@ public abstract class Beacon {
     public void onAdvertiseEnabled(BleService service) {
         // (re)create the beacon
         service.startBeaconAdvertiser(this);
-    }
-
-    public boolean isConnectable() {
-        return mConnectable;
     }
 
     public BaseEditor edit() {
@@ -386,34 +424,18 @@ public abstract class Beacon {
         return PendingIntent.getBroadcast(context, mStableId, intent, 0);
     }
 
-    public void setError(String error) {
-        mError = error;
+    public void setErrorDetails(String error) {
+        mErrorDetsils = error;
     }
 
-    // Some ugly decorator definitions...
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-            AdvertiseSettings.ADVERTISE_MODE_LOW_POWER,
-            AdvertiseSettings.ADVERTISE_MODE_BALANCED,
-            AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY
-    })
-    public @interface AdvertiseMode {}
-
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-            AdvertiseSettings.ADVERTISE_TX_POWER_ULTRA_LOW,
-            AdvertiseSettings.ADVERTISE_TX_POWER_LOW,
-            AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM,
-            AdvertiseSettings.ADVERTISE_TX_POWER_HIGH
-    })
-    public @interface AdvertiseTxPower {}
+    public CharSequence getNotificationSubject() {
+        return null == mName ? "<unnamed>" : mName.substring(0, Math.min(30, mName.length()));
+    }
 
     public class BaseEditor<T> {
         protected boolean mRestartBeacon = false;
 
-        public BaseEditor<T> setAdvertiseMode(@AdvertiseMode int mode) {
+        public BaseEditor<T> setAdvertiseMode(@Advertiser.Mode int mode) {
             if (mode != mAdvertiseMode) {
                 mAdvertiseMode = mode;
                 mRestartBeacon = true;
@@ -421,7 +443,7 @@ public abstract class Beacon {
             return this;
         }
 
-        public BaseEditor<T> setAdvertiseTxPower(@AdvertiseTxPower int txPowerLevel) {
+        public BaseEditor<T> setAdvertiseTxPower(@Advertiser.Power int txPowerLevel) {
             if (txPowerLevel != mTxPowerLevel) {
                 mTxPowerLevel = txPowerLevel;
                 mRestartBeacon = true;

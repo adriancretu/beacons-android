@@ -1,8 +1,8 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.BleService;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.Advertiser;
-import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
 import com.uriio.beacons.eid.EIDUtils;
 
@@ -27,36 +27,28 @@ public class EddystoneEID extends EddystoneBase {
      * @param txPowerLevel        BLE power level
      * @param name                Optional beacon name
      */
-    public EddystoneEID(long storageId, byte[] identityKey, byte rotationExponent, int timeOffset,
-                        byte[] lockKey,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        super(storageId, lockKey, mode, txPowerLevel, name);
+    public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, byte[] lockKey,
+                        @Advertiser.Mode int mode, @Advertiser.Power int txPowerLevel, String name) {
+        super(lockKey, mode, txPowerLevel, name);
         init(identityKey, rotationExponent, timeOffset);
     }
 
-    public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, byte[] lockKey,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        this(0, identityKey, rotationExponent, timeOffset, lockKey, mode, txPowerLevel, name);
-    }
-
     public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel, String name) {
-        this(0, identityKey, rotationExponent, timeOffset, null, mode, txPowerLevel, name);
+                        @Advertiser.Mode int mode,
+                        @Advertiser.Power int txPowerLevel, String name) {
+        this(identityKey, rotationExponent, timeOffset, null, mode, txPowerLevel, name);
     }
 
     public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, byte[] lockKey,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel) {
-        this(0, identityKey, rotationExponent, timeOffset, lockKey, mode, txPowerLevel, null);
+                        @Advertiser.Mode int mode,
+                        @Advertiser.Power int txPowerLevel) {
+        this(identityKey, rotationExponent, timeOffset, lockKey, mode, txPowerLevel, null);
     }
 
     public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset,
-                        @Beacon.AdvertiseMode int mode,
-                        @Beacon.AdvertiseTxPower int txPowerLevel) {
-        this(0, identityKey, rotationExponent, timeOffset, null, mode, txPowerLevel, null);
+                        @Advertiser.Mode int mode,
+                        @Advertiser.Power int txPowerLevel) {
+        this(identityKey, rotationExponent, timeOffset, null, mode, txPowerLevel, null);
     }
 
     public EddystoneEID(byte[] identityKey, byte rotationExponent, int timeOffset, byte[] lockKey, String name) {
@@ -88,7 +80,7 @@ public class EddystoneEID extends EddystoneBase {
     }
 
     @Override
-    protected Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
+    protected Advertiser createAdvertiser(BleService service) {
         // add time offset to current time
         int timeCounter = getEidClock();
         byte[] data;
@@ -103,8 +95,7 @@ public class EddystoneEID extends EddystoneBase {
         mExpireTime = ((timeCounter >> mRotationExponent) + 1 << mRotationExponent) - mClockOffset;
         mExpireTime *= 1000;
 
-        return new EddystoneAdvertiser(EddystoneAdvertiser.FRAME_EID,
-                data, 0, 8, advertisersManager, getAdvertiseMode(), getTxPowerLevel(), isConnectable());
+        return new EddystoneAdvertiser(this, EddystoneAdvertiser.FRAME_EID, data, 0, 8);
     }
 
     @Override

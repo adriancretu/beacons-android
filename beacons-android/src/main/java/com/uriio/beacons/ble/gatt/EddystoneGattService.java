@@ -9,9 +9,10 @@ import android.os.Build;
 import android.support.annotation.RequiresApi;
 
 import com.uriio.beacons.Util;
+import com.uriio.beacons.ble.EddystoneAdvertiser;
 import com.uriio.beacons.eid.EIDUtils;
+import com.uriio.beacons.model.EddystoneURL;
 
-import org.uribeacon.beacon.UriBeacon;
 import org.whispersystems.curve25519.Curve25519;
 import org.whispersystems.curve25519.Curve25519KeyPair;
 
@@ -317,7 +318,7 @@ public class EddystoneGattService {
 
     private int handleWriteAdvertiseSlotData(byte[] value) {
         switch (value[0]) {     // the frame type
-            case 0x00: // UID
+            case EddystoneAdvertiser.FRAME_UID:
                 if (value.length == 1) {
                     // TODO: 5/25/2016 - check if array is empty, according to spec
                     log("Clearing beacon advertisement format");
@@ -328,15 +329,16 @@ public class EddystoneGattService {
                     mConfigCallback.advertiseUID(Arrays.copyOfRange(value, 1, 17));
                 }
                 break;
-            case 0x10: // URL
-                String url = UriBeacon.decodeUri(Arrays.copyOfRange(value, 1, value.length), 0);
+            case EddystoneAdvertiser.FRAME_URL:
+                String url = EddystoneURL.decode(value, 1);
                 log("Setting URL frame: " + url);
                 mConfigCallback.advertiseURL(url);
                 break;
-            case 0x20: // TLM
-                log("TLM format is not supported");
+            case EddystoneAdvertiser.FRAME_TLM:
+                log("Setting TLM format");
+                mConfigCallback.advertiseTLM();
                 break;
-            case 0x30: // EID
+            case EddystoneAdvertiser.FRAME_EID:
                 if (value.length == 34) {
                     byte[] serverPublicKey = Arrays.copyOfRange(value, 1, 33);
                     byte rotationExponent = value[33];

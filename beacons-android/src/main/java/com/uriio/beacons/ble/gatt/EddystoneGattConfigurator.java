@@ -7,11 +7,12 @@ import android.util.Base64;
 import com.uriio.beacons.BuildConfig;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.Util;
+import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.EddystoneAdvertiser;
-import com.uriio.beacons.model.Beacon;
 import com.uriio.beacons.model.EddystoneBase;
 import com.uriio.beacons.model.EddystoneEID;
+import com.uriio.beacons.model.EddystoneTLM;
 import com.uriio.beacons.model.EddystoneUID;
 import com.uriio.beacons.model.EddystoneURL;
 
@@ -84,7 +85,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
         if (changed) {
             if (null == mConfiguredBeacon || !sameType) {
-                mConfiguredBeacon = new EddystoneURL(0, url, beacon.getLockKey(), beacon.getAdvertiseMode(),
+                mConfiguredBeacon = new EddystoneURL(url, beacon.getLockKey(), beacon.getAdvertiseMode(),
                         beacon.getTxPowerLevel(), beacon.getName());
             } else {
                 ((EddystoneURL) mConfiguredBeacon).edit().setUrl(url).apply();
@@ -107,10 +108,24 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
 
         if (changed) {
             if (null == mConfiguredBeacon || beacon.getKind() != Storage.KIND_EDDYSTONE_UID) {
-                mConfiguredBeacon = new EddystoneUID(0, namespaceInstance, null, beacon.getLockKey(),
+                mConfiguredBeacon = new EddystoneUID(namespaceInstance, null, beacon.getLockKey(),
                         beacon.getAdvertiseMode(), beacon.getTxPowerLevel(), beacon.getName());
             } else {
                 ((EddystoneUID) mConfiguredBeacon).edit().setNamespaceInstance(namespaceInstance).apply();
+            }
+        }
+
+        mIsAdvertisingSet = true;
+    }
+
+    @Override
+    public void advertiseTLM() {
+        EddystoneBase beacon = getModifiedOrOriginalBeacon();
+
+        if (beacon.getKind() != Storage.KIND_EDDYSTONE_TLM) {
+            if (null == mConfiguredBeacon) {
+                mConfiguredBeacon = new EddystoneTLM(60000, beacon.getLockKey(),
+                        beacon.getAdvertiseMode(), beacon.getTxPowerLevel(), beacon.getName());
             }
         }
 
@@ -186,7 +201,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     @Override
     public int setRadioTxPower(byte txPower) {
         byte[] txPowers = getSupportedRadioTxPowers();
-        @Beacon.AdvertiseTxPower int txPowerLevel = 0;
+        @Advertiser.Power int txPowerLevel = 0;
 
         for (int i = 0; i < txPowers.length; i++) {
             if (txPower >= txPowers[i]) {
@@ -208,7 +223,7 @@ class EddystoneGattConfigurator implements EddystoneGattConfigCallback {
     public int setAdvertiseInterval(int advertiseIntervalMs) {
         Util.log(TAG, "setAdvertiseInterval() called with: advertiseIntervalMs = [" + advertiseIntervalMs + "]");
 
-        @Beacon.AdvertiseMode int mode;
+        @Advertiser.Mode int mode;
 
         if (advertiseIntervalMs <= 100 + (250 - 100) / 2) {
             // 100 ms

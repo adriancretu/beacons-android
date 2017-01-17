@@ -1,3 +1,9 @@
+### 1.5.1 (January 17, 2017)
+* **Eddystone-TLM** support - broadcasts device's battery temperature, voltage, service uptime, and estimated PDU count since service started. Because Android allocates a new MAC randomly when TLM advertisement changes, every new telemetry will be seen as a new beacon.
+* Fix GATT crash if Bluetooth was disabled when GATT server tried to start
+* Removed legacy URIBeacon supporting code, replaced with optimized Eddystone-URL encoder and decoder
+* Internal refactorings for better beacon and advertiser construction
+
 ### 1.5.0 (January 10, 2017)
 * Updated storage layer to use a single table for keeping all beacon kinds
 * Support for external beacon kinds (declared in app manifest so they can be loaded on boot / service restarts)

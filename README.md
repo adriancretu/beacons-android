@@ -6,7 +6,7 @@ This library powers the [**Beacon Toy**](https://play.google.com/store/apps/deta
 - [Features](#features)
 - [Setup](#setup)
 - [Create a beacon](#creating-beacons)
-   * [Eddystone-URL / Eddystone-UID / iBeacon](#eddystone-url-eddystone-uid-ibeacon)
+   * [Eddystone-URL/UID/TLM, iBeacon](#eddystone-url-eddystone-uid-ibeacon)
    * [Eddystone-EID](#eddystone-eid)
    * [Eddystone-GATT service](#eddystone-gatt)
 - [Start, pause, or stop a beacon](#changing-beacon-state)
@@ -29,6 +29,7 @@ A **beacon scanning** library. To scan for beacons in your app, use the Nearby A
 - Supported beacon formats:
    * Eddystone-URL (Physical Web)
    * Eddystone-UID
+   * Eddystome-TLM (actual device telemetry)
    * actual Eddystone-EID, with automatic advertiser updates of EID payload
    * iBeacon
    * any other custom kinds (simple extensions)
@@ -51,7 +52,7 @@ It's best to make sure you `stop()` or `delete()` a beacon after you no longer n
    ```groovy
    dependencies {
       ...
-      compile 'com.uriio:beacons-android:1.5.0'
+      compile 'com.uriio:beacons-android:1.5.1'
    }
    ```
 
@@ -77,6 +78,9 @@ new iBeacon(uuid, major, minor).start();
 // a more sophisticated beacon
 new EddystoneUID(myUID, AdvertiseSettings.ADVERTISE_MODE_BALANCED, AdvertiseSettings.ADVERTISE_TX_POWER_LOW)
    .start();
+
+// a telemetry beacon that updates the data once every minute
+new EddystoneTLM(60000).start()
 ```
 
 After adding a beacon, it will begin to advertise immediately if Bluetooth is on (or when it gets enabled).
@@ -261,19 +265,24 @@ the receiver can't be called from other applications. Likewise, global receivers
     @Override
     public void onReceive(Context context, Intent intent) {
         if (BleService.ACTION_BEACONS.equals(intent.getAction())) {
-            // some events also contain beacon IDs, or error message / code
+            // some events also contain a beacon ID, or error message / code
             switch (intent.getIntExtra(BleService.EXTRA_BEACON_EVENT, 0)) {
-                case BleService.EVENT_ADVERTISER_ADDED:   // new beacon added
+                case BleService.EVENT_ADVERTISER_ADDED:
+                    // a new or stopped beacon entered active state
                     break;
-                case BleService.EVENT_ADVERTISER_STARTED: // BLE transmit on
+                case BleService.EVENT_ADVERTISER_STARTED:
+                    // a beacon started transmitting a new advertisement
                     break;
-                case BleService.EVENT_ADVERTISER_STOPPED: // BLE transmit off
+                case BleService.EVENT_ADVERTISER_STOPPED:
+                    // a beacon was paused, stopped, or its advertiser will restart
                     break;
-                case BleService.EVENT_ADVERTISER_FAILED:  // error
+                case BleService.EVENT_ADVERTISER_FAILED:  // BLE failure
                     break;
                 case BleService.EVENT_ADVERTISE_UNSUPPORTED:
+                    // device doesn't support peripheral mode
                     break;
-                case BleService.EVENT_SHORTURL_FAILED:    // reserved for Ephemeral URLs
+                case BleService.EVENT_START_FAILED:
+                    // beacon refused to start for some reason, check its error details
                     break;
             }
         }

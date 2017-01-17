@@ -3,7 +3,6 @@ package com.uriio.beacons.ble;
 import android.annotation.TargetApi;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
-import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.os.Build;
 
@@ -17,9 +16,9 @@ import java.util.List;
  */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class AdvertisersManager {
-    public interface BLEListener {
-        void onBLEAdvertiseStarted(Advertiser advertiser);
-        void onBLEAdvertiseFailed(Advertiser advertiser, int errorCode);
+    public interface Listener {
+        void onAdvertiserStarted(Advertiser advertiser);
+        void onAdvertiserFailed(Advertiser advertiser, int errorCode);
     }
 
     private static final String TAG = "AdvertisersManager";
@@ -27,7 +26,7 @@ public class AdvertisersManager {
     private BluetoothLeAdvertiser mBleAdvertiser = null;
     private List<Advertiser> mAdvertisers = new ArrayList<>();
     private final BluetoothAdapter mBluetoothAdapter;
-    private BLEListener mListener;
+    private Listener mListener;
 
     /** Received TX power at 0 meters, for each TX power level **/
     private static final byte[] _advertisedTxPowers = new byte[] {
@@ -38,7 +37,7 @@ public class AdvertisersManager {
             -21, -15, -7, 1
     };
 
-    public AdvertisersManager(BluetoothManager bluetoothManager, BLEListener listener) {
+    public AdvertisersManager(BluetoothManager bluetoothManager, Listener listener) {
         mListener = listener;
         mBluetoothAdapter = bluetoothManager.getAdapter();
 
@@ -77,27 +76,26 @@ public class AdvertisersManager {
             }
         }
 
-        advertiser.startAdvertising(mBleAdvertiser);
+        boolean success = advertiser.start(mBleAdvertiser);
 
+        // change adapter name back
         if (null != tempLocalName) {
             mBluetoothAdapter.setName(oldAdapterName);
         }
 
-        return true;
+        return success;
     }
 
     public void onBluetoothOff() {
         // trying to actually STOP active advertisers at this point crashes with 'BT adapter not turned on'
-        mAdvertisers.clear();
         // the BLE advertiser is now invalid; clear it so we don't try to use it again
         mBleAdvertiser = null;
+        clearAdvertisers();
     }
 
-    public void clearAdvertisers() {
-        if (null != mBleAdvertiser) {
-            for (AdvertiseCallback advertiser : mAdvertisers) {
-                mBleAdvertiser.stopAdvertising(advertiser);
-            }
+    private void clearAdvertisers() {
+        for (Advertiser advertiser : mAdvertisers) {
+            advertiser.stop(mBleAdvertiser);
         }
         mAdvertisers.clear();
     }
@@ -110,26 +108,19 @@ public class AdvertisersManager {
         return mAdvertisers;
     }
 
-    public void onAdvertiserStarted(Advertiser advertiser) {
+    void onAdvertiserStarted(Advertiser advertiser) {
         mAdvertisers.add(advertiser);
-        mListener.onBLEAdvertiseStarted(advertiser);
+        mListener.onAdvertiserStarted(advertiser);
     }
 
-    public void onAdvertiserFailed(Advertiser advertiser, int errorCode) {
+    void onAdvertiserFailed(Advertiser advertiser, int errorCode) {
         mAdvertisers.remove(advertiser);
-        mListener.onBLEAdvertiseFailed(advertiser, errorCode);
+        mListener.onAdvertiserFailed(advertiser, errorCode);
     }
 
-    public void enableAdvertiser(Advertiser advertiser, boolean enable) {
-        if (enable) {
-            startAdvertiser(advertiser);
-        } else {
-            if (null != mBleAdvertiser) {
-                mBleAdvertiser.stopAdvertising(advertiser);
-            }
-            mAdvertisers.remove(advertiser);
-            advertiser.setStoppedState();
-        }
+    public void stopAdvertiser(Advertiser advertiser) {
+        advertiser.stop(mBleAdvertiser);
+        mAdvertisers.remove(advertiser);
     }
 
     public boolean canAdvertise() {

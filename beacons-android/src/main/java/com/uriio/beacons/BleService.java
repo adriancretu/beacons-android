@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.AdvertiseCallback;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -14,9 +15,11 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.text.Html;
@@ -26,10 +29,6 @@ import android.util.Log;
 import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.model.Beacon;
-import com.uriio.beacons.model.EddystoneEID;
-import com.uriio.beacons.model.EddystoneUID;
-import com.uriio.beacons.model.EddystoneURL;
-import com.uriio.beacons.model.iBeacon;
 
 import java.util.UUID;
 
@@ -37,7 +36,7 @@ import java.util.UUID;
  * Advertiser service, that persists and restarts in case of a crash by restoring its previous state.
  */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-public class BleService extends Service implements AdvertisersManager.BLEListener {
+public class BleService extends Service implements AdvertisersManager.Listener {
     private static final String TAG = "BleService";
 
     public static final int NOTIFICATION_ID = 0xB33C0000;
@@ -81,11 +80,29 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         }
     }
 
+    private static final String[] NOTIF_FORMAT_TX_POWER = {
+            "<font color=\"#008000\">%s</font>",
+            "<font color=\"#000080\">%s</font>",
+            "<font color=\"#ff8040\">%s</font>",
+            "<font color=\"#ff0000\"><b>%s</b></font>"
+    };
+    private static final String[] NOTIF_FORMAT_ADV_MODES = {
+            "<font color=\"#008000\">%d Hz</font>",
+            "<font color=\"#000080\">%d Hz</font>",
+            "<font color=\"#ff0000\"><b>%d Hz</b></font>"
+    };
+
     private AdvertisersManager mAdvertisersManager = null;
     private AlarmManager mAlarmManager = null;
 
     /** app BroadcastReceiver, specified as the value of the "com.uriio.receiver" meta-data */
     private ComponentName mAppReceiver = null;
+
+    /** System clock time in milliseconds, when service was created */
+    private long mPowerOnStartTime = 0;
+
+    /** Estimated total broadcasted advertisements since power-on time  */
+    private long mEstimatedPDUCount = 0;
 
     /** Keeps track whether the service was started. */
     private boolean mStarted = false;
@@ -118,6 +135,8 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         super.onCreate();
 
         mAppReceiver = new ComponentName(this, getAppReceiver());
+        mPowerOnStartTime = SystemClock.elapsedRealtime();
+        mEstimatedPDUCount = 0;
     }
 
     @Override
@@ -179,21 +198,18 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
 //            log("Bluetooth event state=" + state);
         if (BluetoothAdapter.STATE_TURNING_OFF == state) {
+            mAdvertisersManager.onBluetoothOff();
+
             for (Beacon beacon : Beacons.getActive()) {
                 // cancel beacon updater alarm
                 mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
 
-                beacon.setAdvertiseState(Beacon.ADVERTISE_NO_BLUETOOTH);
-                Advertiser advertiser = beacon.getAdvertiser();
-                if (null != advertiser) {
-                    advertiser.setStoppedState();
-                }
+                mEstimatedPDUCount += beacon.onBluetoothOff();
             }
 
             // when an advertiser will start, the service will start in foreground again
             stopForeground(true);
 
-            mAdvertisersManager.onBluetoothOff();
             broadcastBeaconEvent(EVENT_ADVERTISER_STOPPED, null);
         } else if (BluetoothAdapter.STATE_ON == state) {
             for (Beacon beacon : Beacons.getActive()) {
@@ -271,7 +287,7 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         }
 
         if (!isAdvertisingSupported()) {
-            beacon.pause();
+            beacon.onAdvertiseFailed(AdvertiseCallback.ADVERTISE_FAILED_FEATURE_UNSUPPORTED);
             broadcastBeaconEvent(EVENT_ADVERTISE_UNSUPPORTED, beacon);
             return false;
         }
@@ -279,10 +295,14 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         // stop current advertiser for this beacon
         Advertiser existingAdvertiser = beacon.getAdvertiser();
         if (null != existingAdvertiser) {
-            mAdvertisersManager.enableAdvertiser(existingAdvertiser, false);
+            mAdvertisersManager.stopAdvertiser(existingAdvertiser);
+            mEstimatedPDUCount += existingAdvertiser.clearPDUCount();
         }
 
-        Advertiser advertiser = beacon.recreateAdvertiser(mAdvertisersManager);
+        Advertiser advertiser = beacon.recreateAdvertiser(this);
+        if (null != advertiser) {
+            advertiser.setManager(mAdvertisersManager);
+        }
 
         return null != advertiser && mAdvertisersManager.startAdvertiser(advertiser);
     }
@@ -324,9 +344,9 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         return null;
     }
 
-    //region AdvertisersManager.BLEListener
+    //region AdvertisersManager.Listener
     @Override
-    public void onBLEAdvertiseStarted(Advertiser advertiser) {
+    public void onAdvertiserStarted(Advertiser advertiser) {
         Beacon beacon = findActiveBeacon(advertiser);
         if (null != beacon) {
             beacon.setAdvertiseState(Beacon.ADVERTISE_RUNNING);
@@ -346,12 +366,11 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
     }
 
     @Override
-    public void onBLEAdvertiseFailed(Advertiser advertiser, int errorCode) {
+    public void onAdvertiserFailed(Advertiser advertiser, int errorCode) {
         Beacon beacon = findActiveBeacon(advertiser);
         if (null != beacon) {
             // mark beacon as paused so we can try to start it again
-            beacon.pause();
-            beacon.setError("Failure " + errorCode);
+            beacon.onAdvertiseFailed(errorCode);
             broadcastError(beacon, EVENT_ADVERTISER_FAILED, errorCode);
         }
     }
@@ -395,43 +414,22 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         }
     }
 
-    private static final String[] _txPowers = {
-            "<font color=\"#008000\">ULP</font>",
-            "<font color=\"#000080\">Low</font>",
-            "<font color=\"#ff8040\">Medium</font>",
-            "<font color=\"#ff0000\"><b>High</b></font>"
-    };
-    private static final String[] _advModes = {
-            "<font color=\"#008000\">1 Hz</font>",
-            "<font color=\"#000080\">4 Hz</font>",
-            "<font color=\"#ff0000\"><b>10 Hz</b></font>"
-    };
-
     private int fillInboxStyleNotification(NotificationCompat.InboxStyle inboxStyle) {
         int totalRunning = 0;
-        for (Beacon item : Beacons.getActive()) {
-            if (item.getAdvertiseState() != Beacon.ADVERTISE_RUNNING) continue;
+        Resources resources = getResources();
+        CharSequence[] txPowers = resources.getTextArray(R.array.com_uriio_txPowerNames);
+
+        for (Beacon beacon : Beacons.getActive()) {
+            if (beacon.getAdvertiseState() != Beacon.ADVERTISE_RUNNING) continue;
 
             ++totalRunning;
 
             SpannableStringBuilder builder = new SpannableStringBuilder();
-
-            if (item instanceof EddystoneURL) {
-                String url = ((EddystoneURL) item).getURL();
-
-                if (null == url) url = "<no URL>";
-                else if (url.length() == 0) url = "<empty URL>";
-
-                builder.append(url);
-            } else if (item instanceof EddystoneUID) {
-                builder.append("Eddystone-UID");
-            } else if (item instanceof EddystoneEID) {
-                builder.append("Eddystone-EID");
-            } else if (item instanceof iBeacon) {
-                builder.append("iBeacon");
-            }
-            builder.append(" ").append(Html.fromHtml(_txPowers[item.getTxPowerLevel()]))
-                    .append(" ").append(Html.fromHtml(_advModes[item.getAdvertiseMode()]));
+            builder.append(beacon.getNotificationSubject());
+            builder.append(" ")
+                    .append(Html.fromHtml(String.format(NOTIF_FORMAT_TX_POWER[beacon.getTxPowerLevel()], txPowers[beacon.getTxPowerLevel()])))
+                    .append(" ")
+                    .append(Html.fromHtml(String.format(NOTIF_FORMAT_ADV_MODES[beacon.getAdvertiseMode()], 1000 / Advertiser.getPduIntervals()[beacon.getAdvertiseMode()])));
 
             inboxStyle.addLine(builder);
         }
@@ -444,7 +442,8 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
 
         // stop the advertising and cancel any pending alarm
         if (null != advertiser && advertiser.getStatus() == Advertiser.STATUS_RUNNING) {
-            mAdvertisersManager.enableAdvertiser(advertiser, false);
+            mAdvertisersManager.stopAdvertiser(advertiser);
+            mEstimatedPDUCount += advertiser.clearPDUCount();
         }
         mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
 
@@ -465,6 +464,26 @@ public class BleService extends Service implements AdvertisersManager.BLEListene
         mAlarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation);
     }
 
+    public AdvertisersManager getAdvertisersManager() {
+        return mAdvertisersManager;
+    }
+
+    /**
+     * @return Power-on time since service is up, in milliseconds
+     */
+    public long getPowerOnTime() {
+        return SystemClock.elapsedRealtime() - mPowerOnStartTime;
+    }
+
+    public long updateEstimatedPDUCount() {
+        for (Beacon beacon : Beacons.getActive()) {
+            if (null != beacon.getAdvertiser()) {
+                mEstimatedPDUCount += beacon.getAdvertiser().clearPDUCount();
+            }
+        }
+
+        return mEstimatedPDUCount;
+    }
 
     private String getAppReceiver() {
         ApplicationInfo appInfo;

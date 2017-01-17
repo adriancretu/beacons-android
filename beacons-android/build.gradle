@@ -1,10 +1,11 @@
 apply plugin: 'com.android.library'
 
-def PUBLISH_VERSION = '1.5.0'
+def PUBLISH_VERSION = '1.5.1'
 
 android {
     compileSdkVersion 25
     buildToolsVersion "25.0.2"
+    resourcePrefix 'com_uriio_'
 
     defaultConfig {
         minSdkVersion 9

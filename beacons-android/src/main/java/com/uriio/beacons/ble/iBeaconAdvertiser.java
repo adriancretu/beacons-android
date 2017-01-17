@@ -4,8 +4,6 @@ import android.annotation.TargetApi;
 import android.bluetooth.le.AdvertiseData;
 import android.os.Build;
 
-import com.uriio.beacons.model.Beacon;
-
 /**
 * Advertise as an Apple iBeacon
 */
@@ -14,21 +12,21 @@ public class iBeaconAdvertiser extends Advertiser {
     public static final int FLAG_APPLE = 0;
     public static final int FLAG_ALT_BEACON = 2;
 
-    private static final int COMPANY_ID_APPLE = 0x004C;
+    private static final int COMPANY_ID_APPLE    = 0x004C;
+
+    // iBeacon - 21 bytes of data follow
+    private static final int IBEACON_INDICATOR   = 0x0215;
+    private static final int ALTBEACON_INDICATOR = 0xBEAC;
 
     private final AdvertiseData mAdvertiseData;
 
-    public iBeaconAdvertiser(AdvertisersManager advertisersManager,
-                             @Beacon.AdvertiseMode int mode,
-                             @Beacon.AdvertiseTxPower int txPowerLevel,
-                             byte[] proximityUUID, int major, int minor, int flags, boolean connectable) {
-        super(advertisersManager, mode, txPowerLevel, connectable);
+    public iBeaconAdvertiser(SettingsProvider provider, byte[] proximityUUID, int major, int minor, int flags) {
+        super(provider);
 
-        byte measuredPower = AdvertisersManager.getZeroDistanceTxPower(txPowerLevel);
+        byte measuredPower = AdvertisersManager.getZeroDistanceTxPower(provider.getTxPowerLevel());
         measuredPower -= 41;
 
-        int indicator = 0x0215;  // flag this as an iBeacon - 21 bytes of data follow
-        if (flags == FLAG_ALT_BEACON) indicator = 0xBEAC;
+        int indicator = FLAG_APPLE == flags ? IBEACON_INDICATOR : ALTBEACON_INDICATOR;
 
         byte[] manufacturerData = new byte[] {
                 (byte) (indicator >>> 8),

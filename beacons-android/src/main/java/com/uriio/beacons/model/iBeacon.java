@@ -1,9 +1,9 @@
 package com.uriio.beacons.model;
 
+import com.uriio.beacons.BleService;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.Util;
 import com.uriio.beacons.ble.Advertiser;
-import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.ble.iBeaconAdvertiser;
 
 import java.util.Arrays;
@@ -16,29 +16,21 @@ public class iBeacon extends Beacon {
     private int mMajor;
     private int mMinor;
 
-    public iBeacon(long storageId,
-                   byte[] uuid, int major, int minor, @AdvertiseMode int advertiseMode,
-                   @AdvertiseTxPower int txPowerLevel,
-                   int flags, String name) {
-        super(storageId, advertiseMode, txPowerLevel, flags, name);
+    public iBeacon(byte[] uuid, int major, int minor, @Advertiser.Mode int advertiseMode,
+                   @Advertiser.Power int txPowerLevel, int flags, String name) {
+        super(advertiseMode, txPowerLevel, flags, name);
 
         init(uuid, major, minor);
     }
 
-    public iBeacon(byte[] uuid, int major, int minor, @AdvertiseMode int advertiseMode,
-                   @AdvertiseTxPower int txPowerLevel,
-                   int flags, String name) {
-        this(0, uuid, major, minor, advertiseMode, txPowerLevel, flags, name);
+    public iBeacon(byte[] uuid, int major, int minor, @Advertiser.Mode int advertiseMode,
+                   @Advertiser.Power int txPowerLevel, String name) {
+        this(uuid, major, minor, advertiseMode, txPowerLevel, iBeaconAdvertiser.FLAG_APPLE, name);
     }
 
-    public iBeacon(byte[] uuid, int major, int minor, @AdvertiseMode int advertiseMode,
-                   @AdvertiseTxPower int txPowerLevel, String name) {
-        this(0, uuid, major, minor, advertiseMode, txPowerLevel, iBeaconAdvertiser.FLAG_APPLE, name);
-    }
-
-    public iBeacon(byte[] uuid, int major, int minor, @AdvertiseMode int advertiseMode,
-                   @AdvertiseTxPower int txPowerLevel) {
-        this(0, uuid, major, minor, advertiseMode, txPowerLevel, iBeaconAdvertiser.FLAG_APPLE, null);
+    public iBeacon(byte[] uuid, int major, int minor, @Advertiser.Mode int advertiseMode,
+                   @Advertiser.Power int txPowerLevel) {
+        this(uuid, major, minor, advertiseMode, txPowerLevel, iBeaconAdvertiser.FLAG_APPLE, null);
     }
 
     public iBeacon(byte[] uuid, int major, int minor, String name) {
@@ -57,9 +49,8 @@ public class iBeacon extends Beacon {
     }
 
     @Override
-    public Advertiser createAdvertiser(AdvertisersManager advertisersManager) {
-        return new iBeaconAdvertiser(advertisersManager, getAdvertiseMode(), getTxPowerLevel(),
-                mUuid, mMajor, mMinor, getFlags(), isConnectable());
+    public Advertiser createAdvertiser(BleService service) {
+        return new iBeaconAdvertiser(this, mUuid, mMajor, mMinor, getFlags());
     }
 
     @Override
