@@ -80,8 +80,10 @@ public class Beacons {
             Cursor cursor = Storage.getInstance().queryAll(false);
             while (cursor.moveToNext()) {
                 Beacon beacon = Storage.fromCursor(cursor);
-                getActive().add(beacon);
-                onActiveBeaconAdded(beacon);
+                if (null != beacon) {
+                    getActive().add(beacon);
+                    onActiveBeaconAdded(beacon);
+                }
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && cursor.getCount() > 0) {

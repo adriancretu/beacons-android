@@ -336,13 +336,7 @@ public class Storage extends SQLiteOpenHelper {
 
     public static Beacon fromCursor(Cursor cursor) {
         Beacon beacon;
-
-        long itemId = cursor.getLong(7);
-        @Advertiser.Mode int advertiseMode = cursor.getInt(9);
-        @Advertiser.Power int txPowerLevel = cursor.getInt(10);
-        int flags = cursor.getInt(11);
         int kind = cursor.getInt(12);
-        String name = cursor.getString(13);
 
         switch (kind) {
             case KIND_EDDYSTONE_URL:
@@ -370,6 +364,12 @@ public class Storage extends SQLiteOpenHelper {
         }
 
         if (null != beacon) {
+            long itemId = cursor.getLong(7);
+            @Advertiser.Mode int advertiseMode = cursor.getInt(9);
+            @Advertiser.Power int txPowerLevel = cursor.getInt(10);
+            int flags = cursor.getInt(11);
+            String name = cursor.getString(13);
+
             beacon.init(itemId, advertiseMode, txPowerLevel, flags, name);
             beacon.setActiveState(cursor.getInt(8));
         }

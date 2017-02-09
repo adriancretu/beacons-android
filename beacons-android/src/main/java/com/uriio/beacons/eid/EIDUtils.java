@@ -57,7 +57,7 @@ public class EIDUtils {
 
         // reset cipher with a new encryption key
         aes.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(tempKey, "AES"));
-        byte[] eid = aes.doFinal(new byte[]{
+        return aes.doFinal(new byte[]{
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 rotationExponent,
                 (byte) ((timeCounter >>> 24) & 0xff),
@@ -65,8 +65,6 @@ public class EIDUtils {
                 (byte) ((timeCounter >>> 8) & 0xff),
                 (byte) (timeCounter & 0xff)
         });
-//        Util.log("tc: " + timeCounter + " rotExp " + rotationExponent + " EID: " + Util.binToHex(eid));
-        return eid;
     }
 
     /**
@@ -83,17 +81,13 @@ public class EIDUtils {
 
     public static byte[] computeIdentityKey(byte[] sharedSecret, byte[] serverPublicKey,
                                             byte[] beaconPublicKey) throws InvalidKeyException, NoSuchAlgorithmException {
-        if (isZero(sharedSecret)) {
+        if (Util.isZeroBuffer(sharedSecret)) {
             throw new InvalidKeyException("Shared secret is zero");
         }
-
-//        Util.log("Shared secret: " + Util.binToHex(sharedSecret));
 
         byte[] salt = new byte[serverPublicKey.length + beaconPublicKey.length];
         System.arraycopy(serverPublicKey, 0, salt, 0, serverPublicKey.length);
         System.arraycopy(beaconPublicKey, 0, salt, serverPublicKey.length, beaconPublicKey.length);
-
-//        Util.log("Salt: " + Util.binToHex(salt));
 
         Mac mac = Mac.getInstance("hmacSHA256");
 
@@ -101,25 +95,11 @@ public class EIDUtils {
         mac.init(new SecretKeySpec(salt, "hmacSHA256"));
         byte[] pseudoRandomKey = mac.doFinal(sharedSecret);
 
-        Util.log("prk: " + Util.binToHex(salt));
-
         // hkdf expand
         mac.reset();
         mac.init(new SecretKeySpec(pseudoRandomKey, "hmacSHA256"));
 
-        byte[] okm = mac.doFinal(new byte[]{1});
-        Util.log("OKM: " + Util.binToHex(okm));
-
-        return okm;
-    }
-
-    private static boolean isZero(byte[] buf) {
-        for (byte b : buf) {
-            if (0 != b) {
-                return false;
-            }
-        }
-        return true;
+        return mac.doFinal(new byte[]{1});
     }
 
     /**

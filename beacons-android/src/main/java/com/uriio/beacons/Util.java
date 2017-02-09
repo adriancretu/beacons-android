@@ -95,4 +95,13 @@ public class Util {
             return null;
         }
     }
+
+    public static boolean isZeroBuffer(byte[] buf) {
+        for (byte b : buf) {
+            if (0 != b) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
