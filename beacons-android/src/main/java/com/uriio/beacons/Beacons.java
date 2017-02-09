@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.os.Build;
 import android.support.annotation.NonNull;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
 import com.uriio.beacons.model.Beacon;
@@ -78,8 +79,9 @@ public class Beacons {
             // restore active items
             Cursor cursor = Storage.getInstance().queryAll(false);
             while (cursor.moveToNext()) {
-                Beacon item = Storage.fromCursor(cursor);
-                getActive().add(item);
+                Beacon beacon = Storage.fromCursor(cursor);
+                getActive().add(beacon);
+                onActiveBeaconAdded(beacon);
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && cursor.getCount() > 0) {
@@ -88,6 +90,14 @@ public class Beacons {
             }
             cursor.close();
         }
+    }
+
+    public static void onActiveBeaconAdded(Beacon beacon) {
+        broadcastLocalIntent(BleService.makeBeaconEventIntent(BleService.EVENT_ADVERTISER_ADDED, beacon));
+    }
+
+    static void broadcastLocalIntent(Intent intent) {
+        LocalBroadcastManager.getInstance(getContext()).sendBroadcast(intent);
     }
 
     public static boolean isInitialized() {

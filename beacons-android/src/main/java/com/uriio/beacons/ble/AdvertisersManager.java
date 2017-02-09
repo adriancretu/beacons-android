@@ -123,12 +123,17 @@ public class AdvertisersManager {
         mAdvertisers.remove(advertiser);
     }
 
+    public boolean isBluetoothEnabled() {
+        return mBluetoothAdapter.isEnabled();
+    }
+
+    /**
+     * Checks whether BLE advertising is supported. This method must only be called after checking
+     * that Bluetooth is enabled.
+     * @return True if a BLE advertiser instance already exists or BLE advertisement is supported.
+     */
     public boolean canAdvertise() {
         if (null != mBleAdvertiser) return true;
-
-        if (!mBluetoothAdapter.isEnabled()) {
-            return false;
-        }
 
         if (!mBluetoothAdapter.isMultipleAdvertisementSupported()) {
             return false;

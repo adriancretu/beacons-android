@@ -235,7 +235,6 @@ public class BleService extends Service implements AdvertisersManager.Listener {
             switch (beacon.getActiveState()) {
                 case Beacon.ACTIVE_STATE_ENABLED:
                     beacon.onAdvertiseEnabled(this);
-                    broadcastBeaconEvent(EVENT_ADVERTISER_ADDED, beacon);
                     break;
                 case Beacon.ACTIVE_STATE_PAUSED:
                     stopBeacon(beacon, false);
@@ -269,9 +268,9 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
     private void restoreSavedState() {
         // restore advertisers
-        for (Beacon item : Beacons.getActive()) {
-            if (item.getActiveState() == Beacon.ACTIVE_STATE_ENABLED) {
-                item.onAdvertiseEnabled(this);
+        for (Beacon beacon : Beacons.getActive()) {
+            if (beacon.getActiveState() == Beacon.ACTIVE_STATE_ENABLED) {
+                beacon.onAdvertiseEnabled(this);
             }
         }
     }
@@ -286,7 +285,11 @@ public class BleService extends Service implements AdvertisersManager.Listener {
             return false;
         }
 
-        if (!isAdvertisingSupported()) {
+        if (!mAdvertisersManager.isBluetoothEnabled()) {
+            return false;
+        }
+
+        if (!mAdvertisersManager.canAdvertise()) {
             beacon.onAdvertiseFailed(AdvertiseCallback.ADVERTISE_FAILED_FEATURE_UNSUPPORTED);
             broadcastBeaconEvent(EVENT_ADVERTISE_UNSUPPORTED, beacon);
             return false;
@@ -307,27 +310,19 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         return null != advertiser && mAdvertisersManager.startAdvertiser(advertiser);
     }
 
-    public boolean isAdvertisingSupported() {
-        return mAdvertisersManager.canAdvertise();
-    }
-
-    private void broadcastLocalIntent(Intent intent) {
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-    }
-
     private void broadcastBeaconEvent(int event, Beacon beacon) {
-        broadcastLocalIntent(makeBeaconEventIntent(event, beacon));
+        Beacons.broadcastLocalIntent(makeBeaconEventIntent(event, beacon));
     }
 
     public void broadcastError(Beacon beacon, int event, String error) {
-        broadcastLocalIntent(makeBeaconEventIntent(event, beacon).putExtra(EXTRA_ERROR, error));
+        Beacons.broadcastLocalIntent(makeBeaconEventIntent(event, beacon).putExtra(EXTRA_ERROR, error));
     }
 
     private void broadcastError(Beacon beacon, int event, int errorCode) {
-        broadcastLocalIntent(makeBeaconEventIntent(event, beacon).putExtra(EXTRA_ERROR_CODE, errorCode));
+        Beacons.broadcastLocalIntent(makeBeaconEventIntent(event, beacon).putExtra(EXTRA_ERROR_CODE, errorCode));
     }
 
-    private Intent makeBeaconEventIntent(int event, Beacon beacon) {
+    public static Intent makeBeaconEventIntent(int event, Beacon beacon) {
         Intent intent = new Intent(ACTION_BEACONS).putExtra(EXTRA_BEACON_EVENT, event);
         if (null != beacon) {
             intent.putExtra(EXTRA_ITEM_ID, beacon.getUUID());

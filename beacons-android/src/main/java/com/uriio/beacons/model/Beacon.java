@@ -223,6 +223,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
                     // prevent adding the beacon as active a second time on init, if thee service
                     // is not started at this point (example: stopping last beacon -> starting a new one)
                     Beacons.getActive().add(this);
+                    Beacons.onActiveBeaconAdded(this);
                 }
             }
         }
