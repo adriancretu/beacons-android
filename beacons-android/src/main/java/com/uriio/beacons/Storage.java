@@ -540,8 +540,8 @@ public class Storage extends SQLiteOpenHelper {
 
     /**
      * Creates a beacon update statement for saving custom data.
-     * First argument is reserved and will always be bound to the ID of the updated item.
-     * @param db
+     * In the returned statement, bind position 1 is reserved for the ID of the updated item.
+     * @param db            SQLite database
      * @param columns       Custom columns to update, 0 to 6 inclusive.
      * @return              A compiled statement. To bind values, start from index 2.
      */
@@ -556,25 +556,13 @@ public class Storage extends SQLiteOpenHelper {
     }
 
     private void migrateUriioItems(SQLiteDatabase db) {
-        SQLiteStatement updateStatement = createUpdater(db, "d0", "d1", "d2", "d3", "d4", "d5", "kind");
-        Cursor cursor = db.rawQuery("SELECT rowid, key, longUrl, urlId, ttl, expires, shortUrl FROM " + URIIO_TABLE, null);
+        SQLiteStatement updateStatement = createUpdater(db, "d1", "d5", "kind");
+        Cursor cursor = db.rawQuery("SELECT rowid, longUrl, shortUrl FROM " + URIIO_TABLE, null);
         while (cursor.moveToNext()) {
             updateStatement.bindLong(1, cursor.getLong(0));
-
-            String urlToken = cursor.getString(1);
-            String longUrl = cursor.getString(2);
-            long urlId = cursor.getLong(3);
-            int ttl = cursor.getInt(4);
-            long expires = cursor.getLong(5);
-            String shortUrl = cursor.getString(6);
-
-            updateStatement.bindString(2, urlToken);
-            bindStringOrNull(updateStatement, 3, longUrl);
-            updateStatement.bindLong(4, urlId);
-            updateStatement.bindLong(5, ttl);
-            updateStatement.bindLong(6, expires);
-            bindStringOrNull(updateStatement, 7, shortUrl);
-            updateStatement.bindLong(8, 0x10000);
+            bindStringOrNull(updateStatement, 2, cursor.getString(1));
+            bindStringOrNull(updateStatement, 3, cursor.getString(2));
+            updateStatement.bindLong(4, 0x10000);
 
             executeSafeUpdateOrDelete(updateStatement);
         }
