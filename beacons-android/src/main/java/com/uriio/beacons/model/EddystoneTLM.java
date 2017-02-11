@@ -3,6 +3,7 @@ package com.uriio.beacons.model;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.BatteryManager;
+import android.os.SystemClock;
 
 import com.uriio.beacons.BleService;
 import com.uriio.beacons.Storage;
@@ -19,6 +20,14 @@ public class EddystoneTLM extends EddystoneBase {
     private static final int MAX_REFRESH_INTERVAL = 300000;
 
     private long mRefreshInterval;
+    private long mScheduledRTC = 0;
+
+    private short mBatteryVoltage = 0;
+    private int mPowerOnTime = 0;
+    private int mEstimatedPDUCount = 0;
+
+    /** Battery temperature, in tenths of Celsius */
+    private int mBatteryTemperature = 0;
 
     public EddystoneTLM(long refreshInterval, byte[] lockKey, @Advertiser.Mode int mode, @Advertiser.Power int txPowerLevel, String name) {
         super(lockKey, mode, txPowerLevel, name);
@@ -60,8 +69,8 @@ public class EddystoneTLM extends EddystoneBase {
     }
 
     @Override
-    public long getScheduledRefreshTime() {
-        return System.currentTimeMillis() + mRefreshInterval;
+    public long getScheduledRefreshElapsedTime() {
+        return mScheduledRTC;
     }
 
     @Override
@@ -71,6 +80,7 @@ public class EddystoneTLM extends EddystoneBase {
 
     @Override
     public void onAdvertiseEnabled(BleService service) {
+        mScheduledRTC = SystemClock.elapsedRealtime() + mRefreshInterval;
         super.onAdvertiseEnabled(service);
     }
 
@@ -83,14 +93,19 @@ public class EddystoneTLM extends EddystoneBase {
             IntentFilter intentFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
             Intent stickyIntent = service.registerReceiver(null, intentFilter);
             if (null != stickyIntent) {
-                buffer.putShort((short) stickyIntent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0));
+                mBatteryVoltage = (short) stickyIntent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
+                buffer.putShort(mBatteryVoltage);
 
-                int temperature = stickyIntent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0);
-                // integer to fixed point 8.8 (fractional part is zero, d'oh)
-                buffer.putShort((short) (temperature << 8));
+                mBatteryTemperature = stickyIntent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0);
 
-                buffer.putInt((int) service.updateEstimatedPDUCount());
-                buffer.putInt((int) service.getPowerOnTime() / 100);
+                // (int * 10) to fixed point 8.8
+                buffer.putShort((short) (mBatteryTemperature / 10 << 8 | mBatteryTemperature % 10 * 256 / 10));
+
+                mEstimatedPDUCount = (int) service.updateEstimatedPDUCount();
+                buffer.putInt(mEstimatedPDUCount);
+
+                mPowerOnTime = (int) service.getPowerOnTime();
+                buffer.putInt(mPowerOnTime / 100);
             }
         }
 
@@ -99,5 +114,21 @@ public class EddystoneTLM extends EddystoneBase {
 
     public long getRefreshInterval() {
         return mRefreshInterval;
+    }
+
+    public short getBatteryVoltage() {
+        return mBatteryVoltage;
+    }
+
+    public int getBatteryTemperature() {
+        return mBatteryTemperature;
+    }
+
+    public int getEstimatedPDUCount() {
+        return mEstimatedPDUCount;
+    }
+
+    public int getPowerOnTime() {
+        return mPowerOnTime;
     }
 }

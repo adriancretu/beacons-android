@@ -1,5 +1,7 @@
 package com.uriio.beacons.model;
 
+import android.os.SystemClock;
+
 import com.uriio.beacons.BleService;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.Advertiser;
@@ -12,11 +14,24 @@ import java.security.GeneralSecurityException;
  * Created on 5/21/2016.
  */
 public class EddystoneEID extends EddystoneBase {
+    // maps the device's uptime zero moment to its UNIX timestamp. Since this may be wrong if the
+    // device's time is off, it's enough to adjust it exactly once with a "corrected" time.
+    private static long BOOT_TIME = System.currentTimeMillis() - SystemClock.elapsedRealtime();
+
     private byte[] mIdentityKey;
     private byte mRotationExponent;
     private int mClockOffset;
 
-    private long mExpireTime = 0;
+    private long mScheduledRefreshTime = 0;
+
+    /**
+     * Sets the absolute known boot time of the device. This should be called after retrieving
+     * the EID server's actual current time, if possible.
+     * @param bootTime    UNIX timestamp in milliseconds.
+     */
+    public static void setBootTime(long bootTime) {
+        BOOT_TIME = bootTime;
+    }
 
     /**
      * EID spec.
@@ -81,26 +96,35 @@ public class EddystoneEID extends EddystoneBase {
 
     @Override
     protected Advertiser createAdvertiser(BleService service) {
-        // add time offset to current time
-        int timeCounter = getEidClock();
+//        epoch = -mClockOffset * 1000t;
+//        bootTime = currentTime - elapsedRealtime;
+//        clockMs = bootTime + elapsedRealtime - epoch;
+
+        int clock = getEidClock();
         byte[] data;
 
         try {
-            data = EIDUtils.computeEID(mIdentityKey, timeCounter, mRotationExponent);
+            data = EIDUtils.computeEID(mIdentityKey, clock, mRotationExponent);
         } catch (GeneralSecurityException e) {
             // too risky to return null, so just use an empty EID buffer
             data = new byte[8];
         }
 
-        mExpireTime = ((timeCounter >> mRotationExponent) + 1 << mRotationExponent) - mClockOffset;
-        mExpireTime *= 1000;
+//        int mExpireTime = ((clock >> mRotationExponent) + 1 << mRotationExponent) - mClockOffset;
+//        mExpireTime *= 1000;
+
+        // todo - randomize exact time when EID is updated
+        int refreshClock = (clock >> mRotationExponent) + 1 << mRotationExponent;
+
+        // epoch - bootTime + refreshClock; 1000L needed for Long result!
+        mScheduledRefreshTime = 1000L * (refreshClock - mClockOffset) - BOOT_TIME;
 
         return new EddystoneAdvertiser(this, EddystoneAdvertiser.FRAME_EID, data, 0, 8);
     }
 
     @Override
-    public long getScheduledRefreshTime() {
-        return mExpireTime;
+    public long getScheduledRefreshElapsedTime() {
+        return mScheduledRefreshTime;
     }
 
     private void init(byte[] identityKey, byte rotationExponent, int timeOffset) {
@@ -121,7 +145,11 @@ public class EddystoneEID extends EddystoneBase {
         return mClockOffset;
     }
 
+    /**
+     * @return Beacon clock, in seconds
+     */
     public int getEidClock() {
-        return (int) (System.currentTimeMillis() / 1000 + mClockOffset);
+        return (int) ((BOOT_TIME + SystemClock.elapsedRealtime()) / 1000) + mClockOffset;
+//        return (int) (System.currentTimeMillis() / 1000 + mClockOffset);
     }
 }

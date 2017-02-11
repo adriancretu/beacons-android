@@ -212,7 +212,7 @@ public abstract class Advertiser extends AdvertiseCallback {
         if (STATUS_RUNNING == mStatus) {
             long now = SystemClock.elapsedRealtime();
             int mode = mSettingsInEffect.getMode();
-            mUnclearedPDUCount += (now - mLastPDUUpdateTime) / PDU_INTERVALS[mode];
+            mUnclearedPDUCount += Math.max(1, (now - mLastPDUUpdateTime) / PDU_INTERVALS[mode]);
             mLastPDUUpdateTime = now;
         }
     }

@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.os.Build;
+import android.os.SystemClock;
 import android.support.v4.content.LocalBroadcastManager;
 
 import com.uriio.beacons.Beacons;
@@ -387,7 +388,21 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         return mErrorDetsils;
     }
 
+    /**
+     * @return [Display purposes] UNIX timestamp at which the beacon should refresh. This value may
+     * be wrong if the beacon must be synced with an external service because the system time may be
+     * wrong. Subclasses that need to present an absolute correct time should override this method.
+     */
     public long getScheduledRefreshTime() {
+        long refreshElapsedTime = getScheduledRefreshElapsedTime();
+        return 0 == refreshElapsedTime ? 0 : System.currentTimeMillis() - SystemClock.elapsedRealtime() + refreshElapsedTime;
+    }
+
+    /**
+     * @return The SystemClock.elapsedRealtime() value on which this beacon should be restarted.
+     * This should NOT be computed based on the current system time.
+     */
+    public long getScheduledRefreshElapsedTime() {
         return 0;
     }
 

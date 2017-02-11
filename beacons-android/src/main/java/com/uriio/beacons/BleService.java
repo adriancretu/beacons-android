@@ -346,12 +346,12 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         if (null != beacon) {
             beacon.setAdvertiseState(Beacon.ADVERTISE_RUNNING);
 
-            long scheduledRefreshTime = beacon.getScheduledRefreshTime();
+            long scheduledRefresh = beacon.getScheduledRefreshElapsedTime();
 
-            if (scheduledRefreshTime > 0) {
+            if (scheduledRefresh > 0) {
                 // schedule alarm for next onAdvertiseEnabled
-                if(BuildConfig.DEBUG) Log.d(TAG, "Scheduling alarm for " + beacon.getUUID() + " in " + scheduledRefreshTime);
-                scheduleRTCAlarm(scheduledRefreshTime, beacon.getAlarmPendingIntent(this));
+                if(BuildConfig.DEBUG) Log.d(TAG, "Scheduling alarm for " + beacon.getUUID() + " in " + scheduledRefresh);
+                scheduleElapsedTimeAlarm(scheduledRefresh, beacon.getAlarmPendingIntent(this));
             }
 
             broadcastBeaconEvent(EVENT_ADVERTISER_STARTED, beacon);
@@ -455,8 +455,8 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         updateForegroundNotification(false);
     }
 
-    public void scheduleRTCAlarm(long triggerAtMillis, PendingIntent operation) {
-        mAlarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation);
+    public void scheduleElapsedTimeAlarm(long triggerAtMillis, PendingIntent operation) {
+        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, operation);
     }
 
     public AdvertisersManager getAdvertisersManager() {
