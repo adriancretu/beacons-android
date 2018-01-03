@@ -124,7 +124,8 @@ public class AdvertisersManager {
     }
 
     public boolean isBluetoothEnabled() {
-        return mBluetoothAdapter.isEnabled();
+        // Bluetooth adapter is null when running on simulator or on a device with no BT hardware
+        return null != mBluetoothAdapter && mBluetoothAdapter.isEnabled();
     }
 
     /**
