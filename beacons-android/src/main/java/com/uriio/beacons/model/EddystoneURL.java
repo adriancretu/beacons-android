@@ -19,9 +19,19 @@ public class EddystoneURL extends EddystoneBase {
 
     private String mURL;
 
-    public static String decode(byte[] data, int offset) {
-        if (null == data || offset >= data.length) {
-            return "";
+    public static String decode(byte[] data) {
+        return null == data ? null : decode(data, 0, data.length);
+    }
+
+    /**
+     * @param data   Raw data bytes
+     * @param offset Array offset
+     * @param length Data length to use.
+     * @return Decoded URL string, or null on failure.
+     */
+    public static String decode(byte[] data, int offset, int length) {
+        if (null == data || offset + length > data.length) {
+            return null;
         }
 
         byte schemeByte = data[offset++];
@@ -30,11 +40,13 @@ public class EddystoneURL extends EddystoneBase {
         }
 
         StringBuilder builder = new StringBuilder(SCHEMES[schemeByte]);
-        while (offset < data.length) {
+
+        // we've read the schema byte, so URL payload length is one less
+        while (--length > 0) {
             byte val = data[offset++];
             if (val < 0 || 0x7f == val) return null;
             if (val > 32) {
-                builder.append(val);
+                builder.append((char) val);
             } else {
                 if (val >= EXPANSIONS.length) return null;
                 builder.append(EXPANSIONS[val]);

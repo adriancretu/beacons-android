@@ -330,7 +330,7 @@ public class EddystoneGattService {
                 }
                 break;
             case EddystoneAdvertiser.FRAME_URL:
-                String url = EddystoneURL.decode(value, 1);
+                String url = EddystoneURL.decode(value, 1, value.length - 1);
                 log("Setting URL frame: " + url);
                 mConfigCallback.advertiseURL(url);
                 break;
