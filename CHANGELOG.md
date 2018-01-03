@@ -1,3 +1,13 @@
+### 1.5.2 (January 3, 2018)
+* New generic **offline** dynamic Eddystone-URL ephemeral beacon type, using **EID** strategy
+* Schedule beacon refresh using device elapsed real-time, instead of unreliable system time
+* Fix Eddystone-TLM battery temperature value
+* Fix wrong "feature not supported" error being sent out when Bluetooth was just disabled
+* "Advertiser added" event was not sent when enabling the first beacon, if Bluetooth was off
+* NPE crash fix, for Android 5.0+ devices with no Bluetooth adapter
+* Don't lose track of a started beacon when service wasn't yet started and no active beacons are stored.
+* Android Oreo notification channel
+
 ### 1.5.1 (January 17, 2017)
 * **Eddystone-TLM** support - broadcasts device's battery temperature, voltage, service uptime, and estimated PDU count since service started. Because Android allocates a new MAC randomly when TLM advertisement changes, every new telemetry will be seen as a new beacon.
 * Fix GATT crash if Bluetooth was disabled when GATT server tried to start
@@ -10,7 +20,7 @@
 * Added generic BLE advertiser that accepts supported Android data types needed for advertising.
 * Check explicitly for Lollipop when trying to start a beacon, to avoid crashes due to missing API calls
 * Set beacon state to **paused** when it fails to advertise
-* Add permission removal directives to manifest for a few automatically added sesnsitive permissions
+* Add permission removal directives to manifest for a few automatically added sensitive permissions
 * Moved UriIO custom dynamic beacon kind to the UriIO client library, where it always belonged
 
 ### 1.4.4 (January 2, 2017)
