@@ -10,9 +10,11 @@ import android.database.Cursor;
 import android.os.Build;
 import android.os.SystemClock;
 import android.support.v4.content.LocalBroadcastManager;
+import android.util.Log;
 
 import com.uriio.beacons.Beacons;
 import com.uriio.beacons.BleService;
+import com.uriio.beacons.BuildConfig;
 import com.uriio.beacons.Receiver;
 import com.uriio.beacons.Storage;
 import com.uriio.beacons.ble.Advertiser;
@@ -23,6 +25,9 @@ import java.util.UUID;
  * Base container for an item.
  */
 public abstract class Beacon implements Advertiser.SettingsProvider {
+    private static final String TAG = "Beacon";
+    private static boolean D = BuildConfig.DEBUG;
+
     /**
      * Beacon is active and enabled.
      */
@@ -112,6 +117,15 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         this(0);
     }
 
+    @Override
+    public String toString() {
+        if(BuildConfig.DEBUG) {
+            return "stableID " + mStableId + " storeId " + mStorageId + " uuid " + mUUID + " name " + mName;
+        }
+
+        return super.toString();
+    }
+
     /**
      * Sets some basic properties. Should only be called immediately after creation, and before save().
      */
@@ -173,6 +187,8 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
      * @return True on success. Note that the actual advertising may fail later, this call only transitions the beacon into enabled state.
      */
     public boolean start() {
+        if(D) Log.d(TAG, "start() called");
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             // can't advertise below L
             return false;
@@ -181,6 +197,8 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         if (Beacons.getActive().size() == 0) {
             Context context = Beacons.getContext();
             if (null == context) return false;
+
+            if(D) Log.d(TAG, "no active beacons, starting service");
 
             context.startService(new Intent(context, BleService.class));
         }
@@ -204,11 +222,17 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         setState(ACTIVE_STATE_PAUSED, true);
     }
 
+    /**
+     * Stops the beacon from advertising.
+     */
     public void stop() {
+        // change state and save the new state if needed
         setState(ACTIVE_STATE_STOPPED, true);
     }
 
     private boolean setState(int state, boolean persist) {
+        if(D) Log.d(TAG, "setState() called with: state = [" + state + "], persist = [" + persist + "]");
+
         if (state < 0 || state > 2) {
             return false;
         }
@@ -216,20 +240,31 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         Beacon targetBeacon = getSavedId() > 0 ? Beacons.findActive(getSavedId()) : Beacons.findActive(getUUID());
 
         if (null == targetBeacon) {
-            targetBeacon = this;
-
+            // this beacon is not known to be active
             if (state != Beacon.ACTIVE_STATE_STOPPED) {
-                // beacon is not active, and will not be stopped
-                if (Beacons.isInitialized()) {
-                    // prevent adding the beacon as active a second time on init, if thee service
-                    // is not started at this point (example: stopping last beacon -> starting a new one)
+                // the new state is not 'stopped', so that means it will switch to active
+
+                // if the Beacons singleton is initialized we need to mark ourself as active.
+                // If it's not, beacon might get added a second time on Beacons init, if the service
+                // is not started at this point (example: stopping last beacon -> starting a new one)
+                // If we are not being persisted before Beacons.init, beacon gets discarded.
+                // usecase - an app starts its first beacon, service gets created,
+                // only the persisted beacons are known and activated.
+                // TL;DR - make sure a new unpersisted beacon is kept track of
+                if (Beacons.isInitialized()
+                        || (0 == mStorageId))
+                {
                     Beacons.getActive().add(this);
                     Beacons.onActiveBeaconAdded(this);
                 }
             }
+
+            targetBeacon = this;
         }
 
         if (state != targetBeacon.getActiveState()) {
+            if(D) Log.d(TAG, "new state! " + state + " old " + targetBeacon.getActiveState());
+
             // item changed state
             targetBeacon.setActiveState(state);
             if (persist && targetBeacon.getSavedId() > 0) {
