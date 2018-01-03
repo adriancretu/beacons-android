@@ -6,4 +6,7 @@
         <item>Medium</item>
         <item>High</item>
     </string-array>
+    <string name="com_uriio_notification_channel_name">Beacon advertising</string>
+    <string name="com_uriio_notification_channel_description">Notifies about active low-energy beacons advertised by the app.</string>
+    <string name="com_uriio_notification_title">Beacons active</string>
 </resources>

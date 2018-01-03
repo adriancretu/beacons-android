@@ -2,6 +2,7 @@ package com.uriio.beacons;
 
 import android.annotation.TargetApi;
 import android.app.AlarmManager;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -38,6 +39,7 @@ import java.util.UUID;
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class BleService extends Service implements AdvertisersManager.Listener {
     private static final String TAG = "BleService";
+    private static boolean D = BuildConfig.DEBUG;
 
     public static final int NOTIFICATION_ID = 0xB33C0000;
 
@@ -94,6 +96,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
     private AdvertisersManager mAdvertisersManager = null;
     private AlarmManager mAlarmManager = null;
+    private NotificationManager mNotificationManager = null;
 
     /** app BroadcastReceiver, specified as the value of the "com.uriio.receiver" meta-data */
     private ComponentName mAppReceiver = null;
@@ -127,12 +130,17 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     //region Service
     @Override
     public IBinder onBind(Intent intent) {
+        if(D) Log.d(TAG, "onBind() called with: intent = [" + intent + "]");
         return new LocalBinder();
     }
 
     @Override
     public void onCreate() {
+        if(D) Log.d(TAG, "onCreate() called");
+
         super.onCreate();
+
+        mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
         mAppReceiver = new ComponentName(this, getAppReceiver());
         mPowerOnStartTime = SystemClock.elapsedRealtime();
@@ -141,6 +149,8 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if(D) Log.d(TAG, "onStartCommand() called with: intent = [" + intent + "], flags = [" + flags + "], startId = [" + startId + "]");
+
         if (!mStarted) {
             initializeService();
             mStarted = true;
@@ -165,6 +175,8 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
     @Override
     public void onDestroy() {
+        if(D) Log.d(TAG, "onDestroy() called");
+
         // we can end up destroyed without actually ever being started, and since we didn't
         // register our receiver, the app would crash on unregister
         if (mStarted) {
@@ -183,7 +195,8 @@ public class BleService extends Service implements AdvertisersManager.Listener {
             for (Beacon beacon : Beacons.getActive()) {
                 mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
             }
-            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
+
+            mNotificationManager.cancel(NOTIFICATION_ID);
 
             mStarted = false;
         }
@@ -191,6 +204,8 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         Beacons.onBleServiceDestroyed();
 
         super.onDestroy();
+
+        mNotificationManager = null;
     }
     //endregion
 
@@ -224,13 +239,15 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     }
 
     private void handleItemState(Intent intent) {
+        if(D) Log.d(TAG, "handleItemState() called with: intent = [" + intent + "]");
+
         Beacon beacon = Beacons.findActive(intent.getLongExtra(EXTRA_ITEM_STORAGE_ID, 0));
 
         // unsaved beacon, try finding by UUID
         if (null == beacon) beacon = Beacons.findActive((UUID) intent.getSerializableExtra(EXTRA_ITEM_ID));
 
         if (null != beacon) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "Received itemState intent for " + beacon.getUUID());
+            if (D) Log.d(TAG, "Received itemState intent for " + beacon);
 
             switch (beacon.getActiveState()) {
                 case Beacon.ACTIVE_STATE_ENABLED:
@@ -247,6 +264,8 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     }
 
     private void initializeService() {
+        if(D) Log.d(TAG, "initializeService() called");
+
         Beacons.initialize(this);
 
         mAlarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
@@ -383,13 +402,29 @@ public class BleService extends Service implements AdvertisersManager.Listener {
                     .setContentIntent(PendingIntent.getBroadcast(this, 0,
                             new Intent(ACTION_NOTIFICATION_CONTENT).setComponent(mAppReceiver), 0))
                     .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                    .setContentTitle("Beacons active")
+                    .setContentTitle(getString(R.string.com_uriio_notification_title))
                     .setContentText(contentText)
                     .setStyle(inboxStyle)
                     .setOngoing(true)
                     .setPriority(NotificationCompat.PRIORITY_MIN)
                     .setColor(0xff800000)
                     .setNumber(totalRunning);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                String channelId = BuildConfig.APPLICATION_ID;
+                NotificationChannel notificationChannel = mNotificationManager.getNotificationChannel(channelId);
+
+                if (null == notificationChannel) {
+                    notificationChannel = new NotificationChannel(channelId,
+                            getString(R.string.com_uriio_notification_channel_name),
+                            NotificationManager.IMPORTANCE_LOW);
+                    notificationChannel.setDescription(getString(R.string.com_uriio_notification_channel_description));
+                }
+
+                mNotificationManager.createNotificationChannel(notificationChannel);
+
+                builder.setChannelId(channelId);
+            }
 
             builder.addAction(0, "Pause all", PendingIntent.getBroadcast(this, 0,
                     new Intent(ACTION_PAUSE_ADVERTISER, null, this, Receiver.class), PendingIntent.FLAG_ONE_SHOT));
@@ -400,8 +435,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
                 startForeground(NOTIFICATION_ID, builder.build());
             }
             else {
-                NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                notificationManager.notify(NOTIFICATION_ID, builder.build());
+                mNotificationManager.notify(NOTIFICATION_ID, builder.build());
             }
         }
         else {

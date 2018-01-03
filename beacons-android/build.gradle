@@ -3,13 +3,13 @@ apply plugin: 'com.android.library'
 def PUBLISH_VERSION = '1.5.2'
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.2"
+    compileSdkVersion 27
+    buildToolsVersion "27.0.3"
     resourcePrefix 'com_uriio_'
 
     defaultConfig {
-        minSdkVersion 9
-        targetSdkVersion 25
+        minSdkVersion 14
+        targetSdkVersion 27
         versionName PUBLISH_VERSION
         // versionCode not relevant for library projects
         // versionCode 1
@@ -45,8 +45,10 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
 
-    compile 'com.android.support:appcompat-v7:25.3.1'
-    compile 'org.whispersystems:curve25519-android:0.3.0'
+    compile 'com.android.support:support-core-utils:27.0.2'
+
+    // https://github.com/WhisperSystems/curve25519-java
+    compile 'org.whispersystems:curve25519-android:0.4.1'
 
     testCompile 'junit:junit:4.12'
 }
