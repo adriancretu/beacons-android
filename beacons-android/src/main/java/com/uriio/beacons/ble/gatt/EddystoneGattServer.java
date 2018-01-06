@@ -20,6 +20,7 @@ import com.uriio.beacons.model.EddystoneBase;
 import com.uriio.beacons.model.EddystoneURL;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Manages an Eddystone-GATT config service.
@@ -30,9 +31,9 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
         void onGattFinished(EddystoneBase configuredBeacon);
     }
 
-    private EddystoneGattConfigurator mEddystoneConfigurator;
     private static final String TAG = "EddystoneGattServer";
 
+    private EddystoneGattConfigurator mEddystoneConfigurator;
     private EddystoneGattService mEddystoneGattService = null;
     private BluetoothGattServer mGattServer;
     private Listener mListener;
@@ -63,6 +64,18 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
         Context context = Beacons.getContext();
 
         mBluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
+        if (null == mBluetoothManager) {
+            // this check mostly hides a NPE warning - this is not null on Pixel 2 API 27 emulator
+            log("Could not obtain access to Bluetooth manager");
+            return false;
+        }
+
+        // fix an inner NPE not handled by openGattServer
+        if (null == mBluetoothManager.getAdapter()) {
+            log("No Bluetooth adapter");
+            return false;
+        }
+
         mGattServer = mBluetoothManager.openGattServer(context, this);
         if (null == mGattServer) {
             log("Failed to open GATT server");
@@ -205,7 +218,7 @@ public class EddystoneGattServer extends BluetoothGattServerCallback {
     public void onExecuteWrite(BluetoothDevice device, int requestId, boolean execute) {
         super.onExecuteWrite(device, requestId, execute);
 
-        log(String.format("%s Request %d: executeWrite(%s) is not expected!",
+        log(String.format(Locale.US, "%s Unexpected request %d: executeWrite(%s)",
                 device, requestId, execute));
 //        mGattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, new byte[0]);
     }
