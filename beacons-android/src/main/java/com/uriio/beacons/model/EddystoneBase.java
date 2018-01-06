@@ -34,7 +34,7 @@ public abstract class EddystoneBase extends Beacon {
 
     /**
      * Beacon's Lock Key to be used in GATT configuration.
-     * @return
+     * @return This beacon's 16-bytes Lock Key
      */
     public byte[] getLockKey() {
         return mLockKey;

@@ -1,5 +1,6 @@
 package com.uriio.beacons;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -23,6 +24,7 @@ import com.uriio.beacons.model.iBeacon;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Database manager.
@@ -171,7 +173,7 @@ public class Storage extends SQLiteOpenHelper {
 
         if (oldVersion < 7) {
             for (int idx = 0; idx < 7; idx++) {
-                db.execSQL(String.format("ALTER TABLE " + ITEMS_TABLE + " ADD COLUMN d%d TEXT", idx));
+                db.execSQL(String.format(Locale.US, "ALTER TABLE " + ITEMS_TABLE + " ADD COLUMN d%d TEXT", idx));
             }
 
             migrateUriioItems(db);
@@ -508,6 +510,7 @@ public class Storage extends SQLiteOpenHelper {
         }
     }
 
+    @SuppressLint("ObsoleteSdkInt")
     private void executeSafeUpdateOrDelete(SQLiteStatement statement) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
             statement.executeUpdateDelete();

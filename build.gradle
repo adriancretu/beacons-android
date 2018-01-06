@@ -5,7 +5,7 @@ buildscript {
 
         // https://developer.android.com/studio/build/gradle-plugin-3-0-0-migration.html#apply_plugin
         // needed for CLI gradlew to find Gradle plugin 3.0
-        google();
+        google()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.0.1'
@@ -15,10 +15,8 @@ buildscript {
 allprojects {
     repositories {
         jcenter()
-        maven {
-            // Play Services / Support libraries
-            url "https://maven.google.com"
-        }
+        // Play Services / Support libraries
+        google()
     }
 }
 

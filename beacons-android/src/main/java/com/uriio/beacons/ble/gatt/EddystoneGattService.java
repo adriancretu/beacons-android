@@ -1,5 +1,6 @@
 package com.uriio.beacons.ble.gatt;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
@@ -22,6 +23,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.UUID;
 
 import javax.crypto.Cipher;
@@ -90,12 +92,12 @@ public class EddystoneGattService {
 
         byte version = 0x00;
 
-        /**
-         * We need two slots to support EID registration.
-         * Beacon Tools tries to use slot 1 for EID registration, even if we specify we only have 1 slot.
-         * The second slot is for the configurable beacon, which may be started, re-started, or stopped during config
-         * Note that restarting the master BLE advertiser (or any other one) kills the GATT connection (BT address changes)
-         * fortunately we will fake the second slot so we don;t require its BLE running during config.
+        /*
+          We need two slots to support EID registration.
+          Beacon Tools tries to use slot 1 for EID registration, even if we specify we only have 1 slot.
+          The second slot is for the configurable beacon, which may be started, re-started, or stopped during config
+          Note that restarting the master BLE advertiser (or any other one) kills the GATT connection (BT address changes)
+          To work around this, the second slot doesn't start the real beacon until GATT disconnects.
         */
         byte maxSupportedTotalSlots = 2;
         byte maxSupportedEidSlots = 1;
@@ -261,7 +263,7 @@ public class EddystoneGattService {
                     }
                     else log("Unlock failed!");
                 }
-                else log(String.format("Unlock: expected 16 bytes, got %d", value.length));
+                else log(String.format(Locale.US, "Unlock: expected 16 bytes, got %d", value.length));
             }
 
             log("Beacon locked - write request denied");
@@ -288,7 +290,7 @@ public class EddystoneGattService {
 
                 // if Radio TX has changed, then Advertised TX has also changed
                 mAdvertisedTxPowerCharacteristic.setValue(mConfigCallback.getAdvertisedTxPower(), BluetoothGattCharacteristic.FORMAT_SINT8, 0);
-                log(String.format("Radio TX Power %d was requested. Actual value is now %d",
+                log(String.format(Locale.US, "Radio TX Power %d was requested. Actual value is now %d",
                         value[0], txPower));
             }
             else {
@@ -299,7 +301,7 @@ public class EddystoneGattService {
                 int wantedAdvertiseInterval = unpackShort(value);
                 int actualAdvertiseInterval = mConfigCallback.setAdvertiseInterval(wantedAdvertiseInterval);
                 characteristic.setValue(toBigEndian(actualAdvertiseInterval), BluetoothGattCharacteristic.FORMAT_UINT16, 0);
-                log(String.format("Advertise Interval %d was requested. Actual value is now %d",
+                log(String.format(Locale.US, "Advertise Interval %d was requested. Actual value is now %d",
                         wantedAdvertiseInterval, actualAdvertiseInterval));
             }
             else {
@@ -342,7 +344,7 @@ public class EddystoneGattService {
                 if (value.length == 34) {
                     byte[] serverPublicKey = Arrays.copyOfRange(value, 1, 33);
                     byte rotationExponent = value[33];
-                    log(String.format("Computing Identity Key with rotation exponent %d and server PublicKey %s",
+                    log(String.format(Locale.US, "Computing Identity Key with rotation exponent %d and server PublicKey %s",
                             rotationExponent, Util.binToHex(serverPublicKey)));
 
                     log("Generating ECDH Private Key");
@@ -378,9 +380,10 @@ public class EddystoneGattService {
     }
 
     private byte[] aes_transform(boolean encrypt, byte[] src, int offset, int len) {
-        String transformation = "AES/ECB/NoPadding";
         try {
-            Cipher aes = Cipher.getInstance(transformation);
+            @SuppressLint("GetInstance")
+            Cipher aes = Cipher.getInstance("AES/ECB/NoPadding");
+
             aes.init(encrypt ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE,
                     new SecretKeySpec(mLockKey, 0, 16, "AES"));
             return aes.doFinal(src, offset, len);

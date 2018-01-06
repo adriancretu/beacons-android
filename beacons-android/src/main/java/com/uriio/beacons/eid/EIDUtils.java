@@ -11,11 +11,8 @@ import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.Mac;
-import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
@@ -30,18 +27,11 @@ public class EIDUtils {
      * @param timeCounter         Advertiser time counter
      * @param rotationExponent    Advertiser rotation exponent (0 to 15)
      * @return Final ephemeral key of 16 bytes, of which only the first 8 bytes should be used.
-     * @throws NoSuchPaddingException
-     * @throws NoSuchAlgorithmException
-     * @throws InvalidKeyException
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
      */
     @NonNull
     public static byte[] computeEID(byte[] key, int timeCounter, byte rotationExponent) throws GeneralSecurityException {
-//        String transformation = "AES/CBC/PKCS5Padding";
-        String transformation = "AES/ECB/NoPadding";
         @SuppressLint("GetInstance")  // spec says it has to be ECB, ignore lint warning
-        Cipher aes = Cipher.getInstance(transformation);
+        Cipher aes = Cipher.getInstance("AES/ECB/NoPadding");
         aes.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, 0, 16, "AES"));
 
         byte[] tempKey = aes.doFinal(new byte[] {
@@ -109,7 +99,6 @@ public class EIDUtils {
      * @param privateKey          Advertiser private key
      * @param rotationExponent    EID rotation exponent (0 to 15)
      * @return  Result of registration, or null if registration failed.
-     * @throws GeneralSecurityException
      */
     public static RegistrationResult register(EIDResolver eidServer, byte[] publicKey,
                                               byte[] privateKey, byte rotationExponent) throws GeneralSecurityException {

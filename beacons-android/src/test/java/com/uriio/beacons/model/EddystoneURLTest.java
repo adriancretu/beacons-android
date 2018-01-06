@@ -53,27 +53,27 @@ public class EddystoneURLTest {
     @Test
     public void decode() throws Exception {
         for (Map.Entry<String, byte[]> entry : valid.entrySet()) {
-            assertEquals(entry.getKey(), EddystoneURL.decode(entry.getValue()));;
+            assertEquals(entry.getKey(), EddystoneURL.decode(entry.getValue()));
         }
 
         for (Map.Entry<String, byte[]> entry : unexpanded.entrySet()) {
-            assertEquals(entry.getKey(), EddystoneURL.decode(entry.getValue()));;
+            assertEquals(entry.getKey(), EddystoneURL.decode(entry.getValue()));
         }
 
         for (byte[] bytes : undecodable) {
-            assertEquals(null, EddystoneURL.decode(bytes));;
+            assertEquals(null, EddystoneURL.decode(bytes));
         }
     }
 
     @Test
     public void encode() throws Exception {
         for (Map.Entry<String, byte[]> entry : valid.entrySet()) {
-            assertArrayEquals(entry.getKey(), EddystoneURL.encode(entry.getKey()), entry.getValue());;
+            assertArrayEquals(entry.getKey(), EddystoneURL.encode(entry.getKey()), entry.getValue());
         }
 
         for (Map.Entry<String, byte[]> entry : unexpanded.entrySet()) {
             // we expect this item to compress better than original
-            assertNotEquals(entry.getKey(), EddystoneURL.encode(entry.getKey()));;
+            assertNotEquals(entry.getKey(), EddystoneURL.encode(entry.getKey()));
         }
 
         for (String value : unencodable) {

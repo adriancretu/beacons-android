@@ -29,10 +29,10 @@ public interface EddystoneGattConfigCallback {
     int setAdvertiseInterval(int advertiseIntervalMs);
 
     /**
-     * Requests advertising an URL, in an already encoded form.
-     * @param advertiseData
+     * Requests to configure this beacon to advertise as Eddystone-URL
+     * @param url The URL to advertise.
      */
-    void advertiseURL(String advertiseData);
+    void advertiseURL(String url);
 
     /**
      * @param namespaceInstance    16-bytes namespace + instance raw data.
