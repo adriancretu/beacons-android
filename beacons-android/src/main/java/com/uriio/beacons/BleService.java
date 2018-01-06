@@ -116,7 +116,12 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     private BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            switch (intent.getAction()) {
+            String action = intent.getAction();
+            if (null == action) {
+                return;
+            }
+
+            switch (action) {
                 case BluetoothAdapter.ACTION_STATE_CHANGED:
                     handleBluetoothStateChanged(intent);
                     break;

@@ -16,7 +16,12 @@ public class Receiver extends WakefulBroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (BuildConfig.DEBUG) Util.log(TAG, "onReceive: " + intent);
 
-        switch (intent.getAction()) {
+        String action = intent.getAction();
+        if (null == action) {
+            return;
+        }
+
+        switch (action) {
             case BleService.ACTION_NOTIFICATION_CONTENT:
                 // Toast.makeText(context, "Please implement a receiver in your app", Toast.LENGTH_SHORT).show();
                 break;
