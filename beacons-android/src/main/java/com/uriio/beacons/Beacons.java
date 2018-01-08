@@ -20,6 +20,7 @@ import java.util.UUID;
  */
 public class Beacons {
     private static final String TAG = "Beacons";
+    private static boolean D = BuildConfig.DEBUG;
 
     private static final String PREF_API_KEY = "apiKey";     // obsolete
     private static final String PREF_DB_NAME = "db";         // obsolete
@@ -60,10 +61,10 @@ public class Beacons {
         if (null != _instance) {
             // singleton exists, so just set the app context
             _instance.setContext(context);
-            if (BuildConfig.DEBUG) Log.d(TAG, "re-initialized");
+            if (D) Log.d(TAG, "re-initialized");
         }
         else {
-            if (BuildConfig.DEBUG) Log.d(TAG, "initialize");
+            if (D) Log.d(TAG, "initialize");
 
             _instance = new Beacons(context);
 

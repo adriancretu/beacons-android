@@ -127,6 +127,11 @@ public class EddystoneEID extends EddystoneBase {
         return mScheduledRefreshTime;
     }
 
+    @Override
+    public CharSequence getNotificationSubject() {
+        return "EID beacon";
+    }
+
     private void init(byte[] identityKey, byte rotationExponent, int timeOffset) {
         mIdentityKey = identityKey;
         mRotationExponent = rotationExponent;

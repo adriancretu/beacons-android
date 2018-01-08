@@ -3,6 +3,7 @@ package com.uriio.beacons;
 import android.content.Context;
 import android.content.Intent;
 import android.support.v4.content.WakefulBroadcastReceiver;
+import android.util.Log;
 
 import com.uriio.beacons.model.Beacon;
 
@@ -23,14 +24,16 @@ public class Receiver extends WakefulBroadcastReceiver {
 
         switch (action) {
             case BleService.ACTION_NOTIFICATION_CONTENT:
-                // Toast.makeText(context, "Please implement a receiver in your app", Toast.LENGTH_SHORT).show();
+                if (BuildConfig.DEBUG) {
+                    Log.w(TAG, "Default notification used to run the BLE advertisers as a foreground service!");
+                }
                 break;
-            case BleService.ACTION_STOP_ADVERTISER:
+            case BleService.ACTION_STOP_ALL:
                 for (Beacon beacon : Beacons.getActive()) {
                     beacon.stop();
                 }
                 break;
-            case BleService.ACTION_PAUSE_ADVERTISER:
+            case BleService.ACTION_PAUSE_ALL:
                 for (Beacon beacon : Beacons.getActive()) {
                     beacon.pause();
                 }

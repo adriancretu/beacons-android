@@ -2,7 +2,7 @@ package com.uriio.beacons;
 
 import android.annotation.TargetApi;
 import android.app.AlarmManager;
-import android.app.NotificationChannel;
+import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -10,21 +10,16 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.AdvertiseCallback;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.content.res.Resources;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
-import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
-import android.text.Html;
-import android.text.SpannableStringBuilder;
 import android.util.Log;
 
 import com.uriio.beacons.ble.Advertiser;
@@ -41,19 +36,24 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     private static final String TAG = "BleService";
     private static boolean D = BuildConfig.DEBUG;
 
-    public static final int NOTIFICATION_ID = 0xB33C0000;
+    private static final String META_KEY_NOTIFICATION_PROVIDER = "com.uriio.provider";
 
     public static final String ACTION_BEACONS = BuildConfig.APPLICATION_ID + ".ACTION_BEACONS";
-
-    /** Notification content tapped */
-    public static final String ACTION_NOTIFICATION_CONTENT = BuildConfig.APPLICATION_ID + ".ACTION_NOTIF_CONTENT";
 
     /** Item state changed*/
     public static final String ACTION_ITEM_STATE = BuildConfig.APPLICATION_ID + ".ACTION_ITEM_STATE";
 
+    /**
+     * AlarmManager PendingIntent - a beacon is asking to be recreated with updated advertising data
+     */
     public static final String ACTION_ALARM     = BuildConfig.APPLICATION_ID + ".ACTION_ALARM";
-    static final String ACTION_PAUSE_ADVERTISER = BuildConfig.APPLICATION_ID + ".ACTION_PAUSE_ADVERTISER";
-    static final String ACTION_STOP_ADVERTISER  = BuildConfig.APPLICATION_ID + ".ACTION_STOP_ADVERTISER";
+
+    /** Notification actions pending intents */
+    static final String ACTION_PAUSE_ALL = BuildConfig.APPLICATION_ID + ".ACTION_PAUSE_ALL";
+    static final String ACTION_STOP_ALL  = BuildConfig.APPLICATION_ID + ".ACTION_STOP_ALL";
+
+    /** Notification content tapped */
+    static final String ACTION_NOTIFICATION_CONTENT = BuildConfig.APPLICATION_ID + ".ACTION_NOTIF_CONTENT";
 
     public static final int EVENT_ADVERTISER_ADDED      = 1;
     public static final int EVENT_ADVERTISER_STARTED    = 2;
@@ -82,24 +82,12 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         }
     }
 
-    private static final String[] NOTIF_FORMAT_TX_POWER = {
-            "<font color=\"#008000\">%s</font>",
-            "<font color=\"#000080\">%s</font>",
-            "<font color=\"#ff8040\">%s</font>",
-            "<font color=\"#ff0000\"><b>%s</b></font>"
-    };
-    private static final String[] NOTIF_FORMAT_ADV_MODES = {
-            "<font color=\"#008000\">%d Hz</font>",
-            "<font color=\"#000080\">%d Hz</font>",
-            "<font color=\"#ff0000\"><b>%d Hz</b></font>"
-    };
-
     private AdvertisersManager mAdvertisersManager = null;
     private AlarmManager mAlarmManager = null;
     private NotificationManager mNotificationManager = null;
 
-    /** app BroadcastReceiver, specified as the value of the "com.uriio.receiver" meta-data */
-    private ComponentName mAppReceiver = null;
+    /** App-provided (or default) notification provider. */
+    private NotificationProvider mNotificationProvider = null;
 
     /** System clock time in milliseconds, when service was created */
     private long mPowerOnStartTime = 0;
@@ -147,7 +135,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
-        mAppReceiver = new ComponentName(this, getAppReceiver());
+        mNotificationProvider = getNotificationProvider();
         mPowerOnStartTime = SystemClock.elapsedRealtime();
         mEstimatedPDUCount = 0;
     }
@@ -201,7 +189,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
                 mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
             }
 
-            mNotificationManager.cancel(NOTIFICATION_ID);
+            mNotificationManager.cancel(mNotificationProvider.getNotificationId());
 
             mStarted = false;
         }
@@ -396,79 +384,26 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     //endregion
 
     private void updateForegroundNotification(boolean newAdvertiserStarted) {
-        NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
-        int totalRunning = fillInboxStyleNotification(inboxStyle);
+        int totalRunning = 0;
+        for (Beacon beacon : Beacons.getActive()) {
+            if (beacon.getAdvertiseState() == Beacon.ADVERTISE_RUNNING) {
+                ++totalRunning;
+            }
+        }
 
         if (totalRunning > 0) {
-            String contentText = totalRunning + " beacons broadcasted by app. Expand for details.";
-            inboxStyle.setSummaryText(totalRunning + " beacons running");
-
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
-                    .setContentIntent(PendingIntent.getBroadcast(this, 0,
-                            new Intent(ACTION_NOTIFICATION_CONTENT).setComponent(mAppReceiver), 0))
-                    .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                    .setContentTitle(getString(R.string.com_uriio_notification_title))
-                    .setContentText(contentText)
-                    .setStyle(inboxStyle)
-                    .setOngoing(true)
-                    .setPriority(NotificationCompat.PRIORITY_MIN)
-                    .setColor(0xff800000)
-                    .setNumber(totalRunning);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String channelId = BuildConfig.APPLICATION_ID;
-                NotificationChannel notificationChannel = mNotificationManager.getNotificationChannel(channelId);
-
-                if (null == notificationChannel) {
-                    notificationChannel = new NotificationChannel(channelId,
-                            getString(R.string.com_uriio_notification_channel_name),
-                            NotificationManager.IMPORTANCE_LOW);
-                    notificationChannel.setDescription(getString(R.string.com_uriio_notification_channel_description));
+            Notification notification = mNotificationProvider.makeNotification(mNotificationManager, totalRunning);
+            if (null != notification) {
+                if (newAdvertiserStarted && 1 == totalRunning) {
+                    startForeground(mNotificationProvider.getNotificationId(), notification);
+                } else {
+                    mNotificationManager.notify(mNotificationProvider.getNotificationId(), notification);
                 }
-
-                mNotificationManager.createNotificationChannel(notificationChannel);
-
-                builder.setChannelId(channelId);
-            }
-
-            builder.addAction(0, "Pause all", PendingIntent.getBroadcast(this, 0,
-                    new Intent(ACTION_PAUSE_ADVERTISER, null, this, Receiver.class), PendingIntent.FLAG_ONE_SHOT));
-            builder.addAction(0, "Stop all", PendingIntent.getBroadcast(this, 0,
-                    new Intent(ACTION_STOP_ADVERTISER, null, this, Receiver.class), PendingIntent.FLAG_ONE_SHOT));
-
-            if (newAdvertiserStarted && 1 == totalRunning) {
-                startForeground(NOTIFICATION_ID, builder.build());
-            }
-            else {
-                mNotificationManager.notify(NOTIFICATION_ID, builder.build());
             }
         }
         else {
-            stopForeground(true);
+            stopForeground(mNotificationProvider.onStoppedForeground());
         }
-    }
-
-    private int fillInboxStyleNotification(NotificationCompat.InboxStyle inboxStyle) {
-        int totalRunning = 0;
-        Resources resources = getResources();
-        CharSequence[] txPowers = resources.getTextArray(R.array.com_uriio_txPowerNames);
-
-        for (Beacon beacon : Beacons.getActive()) {
-            if (beacon.getAdvertiseState() != Beacon.ADVERTISE_RUNNING) continue;
-
-            ++totalRunning;
-
-            SpannableStringBuilder builder = new SpannableStringBuilder();
-            builder.append(beacon.getNotificationSubject());
-            builder.append(" ")
-                    .append(Html.fromHtml(String.format(NOTIF_FORMAT_TX_POWER[beacon.getTxPowerLevel()], txPowers[beacon.getTxPowerLevel()])))
-                    .append(" ")
-                    .append(Html.fromHtml(String.format(NOTIF_FORMAT_ADV_MODES[beacon.getAdvertiseMode()], 1000 / Advertiser.getPduIntervals()[beacon.getAdvertiseMode()])));
-
-            inboxStyle.addLine(builder);
-        }
-
-        return totalRunning;
     }
 
     private void stopBeacon(Beacon beacon, boolean remove) {
@@ -519,20 +454,29 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         return mEstimatedPDUCount;
     }
 
-    private String getAppReceiver() {
+    private NotificationProvider getNotificationProvider() {
         ApplicationInfo appInfo;
         try {
             appInfo = getPackageManager().getApplicationInfo(getPackageName(), PackageManager.GET_META_DATA);
         } catch (PackageManager.NameNotFoundException e) {
-            throw new IllegalArgumentException("App package not found");
+            throw new RuntimeException("App package not found");
         }
 
-        String receiverClassName = null;
+        String providerClassName = null;
+
         // metadata is null when no entries exist
         if (null != appInfo && null != appInfo.metaData) {
-            receiverClassName = appInfo.metaData.getString("com.uriio.receiver");
+            providerClassName = appInfo.metaData.getString(META_KEY_NOTIFICATION_PROVIDER);
         }
 
-        return null != receiverClassName ? receiverClassName : Receiver.class.getName();
+        if (null != providerClassName) {
+            try {
+                return (NotificationProvider) Class.forName(providerClassName).getConstructor(Context.class).newInstance(this);
+            } catch (ReflectiveOperationException ignored) {
+                throw new RuntimeException("Invalid provider class name");
+            }
+        } else {
+            return new NotificationProvider(this);
+        }
     }
 }
