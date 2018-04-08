@@ -4,53 +4,52 @@ def PUBLISH_VERSION = '1.5.2'
 
 android {
     compileSdkVersion 27
-    buildToolsVersion "27.0.3"
+    buildToolsVersion BUILD_TOOLS_VERSION
     resourcePrefix 'com_uriio_'
 
     defaultConfig {
         minSdkVersion 14
         targetSdkVersion 27
         versionName PUBLISH_VERSION
-        // versionCode not relevant for library projects
-        // versionCode 1
     }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-internal.pro', 'proguard-rules.pro'
             consumerProguardFiles 'proguard-rules.pro'
 
-            task ('generateReleaseJavadoc', type: Javadoc) {
-                title 'UriIO Android library reference'
-                description 'Library documentation'
-                failOnError false
+            task('generateReleaseJavadoc', type: Javadoc) {
+                title "Android Beacons $PUBLISH_VERSION documentation"
+                description 'Library documentation generator task'
+                failOnError true
                 source sourceSets.main.java.srcDirs
-                classpath += files(android.getBootClasspath())
+                classpath += files("$projectDir/build/generated/source/buildConfig/release")
                 options {
-                    links "http://docs.oracle.com/javase/7/docs/api/"
-                    linksOffline "http://d.android.com/reference/", "${android.sdkDirectory}/docs/reference"
+                    bootClasspath android.bootClasspath[0]
+                    links 'https://docs.oracle.com/javase/8/docs/api', 'https://developer.android.com/reference'
+                    linksOffline 'https://developer.android.com/reference/', "${android.sdkDirectory}/docs/reference"
                 }
-                include '**/com/uriio/beacons/**'
             }
 
             afterEvaluate {
-                generateReleaseJavadoc.classpath += files(android.libraryVariants.collect { variant ->
-                    variant.javaCompile.classpath.files
-                })
+                libraryVariants.all { variant ->
+                    if ('release' == variant.name) {
+                        generateReleaseJavadoc.classpath += files(variant.javaCompiler.classpath)
+                    }
+                }
             }
         }
     }
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-
-    compile 'com.android.support:support-core-utils:27.0.2'
+    implementation 'com.android.support:support-core-utils:27.1.1'
 
     // https://github.com/WhisperSystems/curve25519-java
-    compile 'org.whispersystems:curve25519-android:0.4.1'
+    implementation 'org.whispersystems:curve25519-android:0.4.1'
 
-    testCompile 'junit:junit:4.12'
+    testImplementation 'junit:junit:4.12'
 }
 
 if (project.hasProperty('ossrhUsername')) apply from: 'deploy.gradle'

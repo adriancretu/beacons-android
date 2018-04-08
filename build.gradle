@@ -4,11 +4,11 @@ buildscript {
         jcenter()
 
         // https://developer.android.com/studio/build/gradle-plugin-3-0-0-migration.html#apply_plugin
-        // needed for CLI gradlew to find Gradle plugin 3.0
+        // Gradle plugin 3.0+ no longer on Maven
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.0.1'
+        classpath 'com.android.tools.build:gradle:3.1.0'
     }
 }
 
