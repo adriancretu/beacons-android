@@ -1,20 +1,10 @@
-# Add project specific ProGuard rules here.
-# By default, the flags in this file are appended to flags specified
-# in C:\dev\android-sdk/tools/proguard/proguard-android.txt
-# You can edit the include path and order by changing the proguardFiles
-# directive in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# Add any project specific keep options here:
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-#Curve25519 loads providers by class name...
+# Curve25519 loads providers by class name
 -keep class * implements org.whispersystems.curve25519.Curve25519Provider
+
+# App notification providers get instantiated via reflection by name
+-keep class * extends com.uriio.beacons.NotificationProvider {
+    <init>(android.content.Context);
+}
+
+# Custom beacon kinds are loaded via reflection
+-keep class * implements com.uriio.beacons.Storage$Persistable
