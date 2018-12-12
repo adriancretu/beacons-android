@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.os.Build;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
@@ -181,9 +182,15 @@ public class Beacons {
      * To check if a beacon is enabled or paused call getActiveState()
      * To check if a beacon is broadcasting call getAdvertiseState()
      */
+    @NonNull
     public static List<Beacon> getActive() {
         if (null == getInstance().mActiveItems) return _instance.mActiveItems = new ArrayList<>();
         return _instance.mActiveItems;
+    }
+
+    @Nullable
+    public static List<Beacon> getActiveIfAny() {
+        return getInstance().mActiveItems;
     }
 
     public static Cursor getStopped() {

@@ -110,7 +110,7 @@ public class EddystoneUID extends EddystoneBase {
         public EddystoneUIDEditor setNamespaceInstance(byte[] namespaceInstance) {
             if (!Arrays.equals(mNamespaceInstance, namespaceInstance)) {
                 mNamespaceInstance = namespaceInstance;
-                mRestartBeacon = true;
+                setNeedsRestart();
             }
             return this;
         }

@@ -179,9 +179,9 @@ public class EddystoneURL extends EddystoneBase {
 
     public class EddystoneURLEditor extends EddystoneEditor {
         public EddystoneURLEditor setUrl(String url) {
-            if (null == url || null == mURL || !url.equals(mURL)) {
+            if (null == url || !url.equals(mURL)) {
                 mURL = url;
-                mRestartBeacon = true;
+                setNeedsRestart();
             }
             return this;
         }

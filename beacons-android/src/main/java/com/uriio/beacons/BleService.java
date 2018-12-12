@@ -26,6 +26,7 @@ import com.uriio.beacons.ble.Advertiser;
 import com.uriio.beacons.ble.AdvertisersManager;
 import com.uriio.beacons.model.Beacon;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -121,15 +122,17 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     };
 
     //region Service
+
     @Override
     public IBinder onBind(Intent intent) {
-        if(D) Log.d(TAG, "onBind() called with: intent = [" + intent + "]");
+        if(D) Log.d(TAG, "onBind " + intent);
+
         return new LocalBinder();
     }
 
     @Override
     public void onCreate() {
-        if(D) Log.d(TAG, "onCreate() called");
+        if(D) Log.d(TAG, "onCreate");
 
         super.onCreate();
 
@@ -142,7 +145,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if(D) Log.d(TAG, "onStartCommand() called with: intent = [" + intent + "], flags = [" + flags + "], startId = [" + startId + "]");
+        if(D) Log.d(TAG, "onStartCommand intent = [" + intent + "], flags = [" + flags + "], startId = [" + startId + "]");
 
         if (!mStarted) {
             initializeService();
@@ -168,7 +171,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
     @Override
     public void onDestroy() {
-        if(D) Log.d(TAG, "onDestroy() called");
+        if(D) Log.d(TAG, "onDestroy");
 
         // we can end up destroyed without actually ever being started, and since we didn't
         // register our receiver, the app would crash on unregister
@@ -185,11 +188,16 @@ public class BleService extends Service implements AdvertisersManager.Listener {
                 mAdvertisersManager = null;
             }
 
-            for (Beacon beacon : Beacons.getActive()) {
-                mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
+            List<Beacon> activeBeacons = Beacons.getActiveIfAny();
+            if (null != activeBeacons) {
+                for (int i = activeBeacons.size() - 1; i >= 0; i--) {
+                    activeBeacons.get(i).cancelRefresh(this);
+                }
             }
 
-            mNotificationManager.cancel(mNotificationProvider.getNotificationId());
+            if (null != mNotificationManager) {
+                mNotificationManager.cancel(mNotificationProvider.getNotificationId());
+            }
 
             mStarted = false;
         }
@@ -199,33 +207,36 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         super.onDestroy();
 
         mNotificationManager = null;
+        mAlarmManager = null;
     }
+
     //endregion
 
     private void handleBluetoothStateChanged(Intent intent) {
         int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-//            log("Bluetooth event state=" + state);
+
+        if(D) Log.d(TAG, "Bluetooth state changed: " + state);
+
         if (BluetoothAdapter.STATE_TURNING_OFF == state) {
             mAdvertisersManager.onBluetoothOff();
 
-            for (Beacon beacon : Beacons.getActive()) {
-                // cancel beacon updater alarm
-                mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
-
-                mEstimatedPDUCount += beacon.onBluetoothOff();
+            List<Beacon> activeBeacons = Beacons.getActiveIfAny();
+            if (null != activeBeacons) {
+                for (int i = activeBeacons.size() - 1; i >= 0; i--) {
+                    mEstimatedPDUCount += activeBeacons.get(i).onBluetoothDisabled(this);
+                }
             }
 
             // when an advertiser will start, the service will start in foreground again
+            // fixme - what if the service is killed while BT is off and we had RUNNING beacons?
             stopForeground(true);
 
             broadcastBeaconEvent(EVENT_ADVERTISER_STOPPED, null);
         } else if (BluetoothAdapter.STATE_ON == state) {
-            for (Beacon beacon : Beacons.getActive()) {
-                if (beacon.getActiveState() == Beacon.ACTIVE_STATE_ENABLED) {
-                    beacon.onAdvertiseEnabled(this);
-                } else {
-                    // beacon was active but not enabled, aka PAUSED
-                    beacon.setAdvertiseState(Beacon.ADVERTISE_STOPPED);
+            List<Beacon> activeBeacons = Beacons.getActiveIfAny();
+            if (null != activeBeacons) {
+                for (int i = activeBeacons.size() - 1; i >= 0; i--) {
+                    activeBeacons.get(i).onBluetoothEnabled(this);
                 }
             }
         }
@@ -257,7 +268,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     }
 
     private void initializeService() {
-        if(D) Log.d(TAG, "initializeService() called");
+        if(D) Log.d(TAG, "initializeService");
 
         Beacons.initialize(this);
 
@@ -315,11 +326,12 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         }
 
         Advertiser advertiser = beacon.recreateAdvertiser(this);
-        if (null != advertiser) {
-            advertiser.setManager(mAdvertisersManager);
+        if (null == advertiser) {
+            return false;
         }
 
-        return null != advertiser && mAdvertisersManager.startAdvertiser(advertiser);
+        advertiser.setManager(mAdvertisersManager);
+        return mAdvertisersManager.startAdvertiser(advertiser);
     }
 
     private void broadcastBeaconEvent(int event, Beacon beacon) {
@@ -362,7 +374,7 @@ public class BleService extends Service implements AdvertisersManager.Listener {
 
             if (scheduledRefresh > 0) {
                 // schedule alarm for next onAdvertiseEnabled
-                if(BuildConfig.DEBUG) Log.d(TAG, "Scheduling alarm for " + beacon.getUUID() + " in " + scheduledRefresh);
+                if(D) Log.d(TAG, "Scheduling alarm for " + beacon.getUUID() + " in " + scheduledRefresh);
                 scheduleElapsedTimeAlarm(scheduledRefresh, beacon.getAlarmPendingIntent(this));
             }
 
@@ -409,14 +421,15 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     private void stopBeacon(Beacon beacon, boolean remove) {
         Advertiser advertiser = beacon.getAdvertiser();
 
-        // stop the advertising and cancel any pending alarm
+        // stop the beacon's advertising
         if (null != advertiser && advertiser.getStatus() == Advertiser.STATUS_RUNNING) {
             mAdvertisersManager.stopAdvertiser(advertiser);
             mEstimatedPDUCount += advertiser.clearPDUCount();
         }
-        mAlarmManager.cancel(beacon.getAlarmPendingIntent(this));
-
+        // cancel any pending alarm
+        beacon.cancelRefresh(this);
         beacon.setAdvertiseState(Beacon.ADVERTISE_STOPPED);
+
         if (remove) {
             Beacons.getActive().remove(beacon);
             if (0 == Beacons.getActive().size()) {
@@ -429,12 +442,18 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         updateForegroundNotification(false);
     }
 
-    public void scheduleElapsedTimeAlarm(long triggerAtMillis, PendingIntent operation) {
-        mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, operation);
+    private void scheduleElapsedTimeAlarm(long triggerAtMillis, PendingIntent operation) {
+        if(D) Log.d(TAG, "scheduleElapsedTimeAlarm at " + triggerAtMillis + " now: " + SystemClock.elapsedRealtime());
+
+        if (null != mAlarmManager) {
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, operation);
+        }
     }
 
-    public AdvertisersManager getAdvertisersManager() {
-        return mAdvertisersManager;
+    public void cancelAlarm(PendingIntent operation) {
+        if (null != mAlarmManager) {
+            mAlarmManager.cancel(operation);
+        }
     }
 
     /**
@@ -445,7 +464,10 @@ public class BleService extends Service implements AdvertisersManager.Listener {
     }
 
     public long updateEstimatedPDUCount() {
-        for (Beacon beacon : Beacons.getActive()) {
+        List<Beacon> activeBeacons = Beacons.getActive();
+        for (int i = activeBeacons.size() - 1; i >= 0; i--) {
+            Beacon beacon = activeBeacons.get(i);
+
             if (null != beacon.getAdvertiser()) {
                 mEstimatedPDUCount += beacon.getAdvertiser().clearPDUCount();
             }
@@ -472,8 +494,8 @@ public class BleService extends Service implements AdvertisersManager.Listener {
         if (null != providerClassName) {
             try {
                 return (NotificationProvider) Class.forName(providerClassName).getConstructor(Context.class).newInstance(this);
-            } catch (ReflectiveOperationException ignored) {
-                throw new RuntimeException("Invalid provider class name");
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException("Invalid provider class name", e);
             }
         } else {
             return new NotificationProvider(this);

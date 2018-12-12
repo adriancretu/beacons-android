@@ -83,7 +83,7 @@ public class iBeacon extends Beacon {
         public BaseEditor setIndicators(byte[] uuid, int major, int minor) {
             if (major != mMajor || minor != mMinor || !Arrays.equals(mUuid, uuid)) {
                 init(uuid, major, minor);
-                mRestartBeacon = true;
+                setNeedsRestart();
             }
             return this;
         }

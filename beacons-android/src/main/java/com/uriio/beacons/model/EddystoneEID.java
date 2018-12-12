@@ -106,8 +106,9 @@ public class EddystoneEID extends EddystoneBase {
         try {
             data = EIDUtils.computeEID(mIdentityKey, clock, mRotationExponent);
         } catch (GeneralSecurityException e) {
-            // too risky to return null, so just use an empty EID buffer
-            data = new byte[8];
+            service.broadcastError(this, BleService.EVENT_START_FAILED, "EID compute failed: " + e.getMessage());
+
+            return null;
         }
 
 //        int mExpireTime = ((clock >> mRotationExponent) + 1 << mRotationExponent) - mClockOffset;

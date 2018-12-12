@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.os.Build;
 import android.os.SystemClock;
+import android.support.annotation.NonNull;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
@@ -29,7 +30,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
     private static boolean D = BuildConfig.DEBUG;
 
     /**
-     * Beacon is active and enabled.
+     * Beacon is active and should be enabled if Bluetooth is available.
      */
     public static final int ACTIVE_STATE_ENABLED = 0;
     /**
@@ -76,7 +77,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
     private int mAdvertiseMode;
     private int mTxPowerLevel;
 
-    /** Current status **/
+    /** Current advertise status. This is the state of the BLE advertising, not of the beacon. **/
     private int mAdvertiseState = ADVERTISE_STOPPED;
 
     private int mActiveState = ACTIVE_STATE_STOPPED;
@@ -85,7 +86,14 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
     private int mErrorCode;
     private String mErrorDetsils;
 
-    public static Beacon fromCursor(Cursor cursor) {
+    /**
+     * Creates a Beacon instance using the specified Cursor. Useful for
+     * deserializing from a persistent layer such as a database.
+     * @param cursor The Cursor to use, positioned at the index of the data to read.
+     * @return A Beacon instance, or null in case it could not be created.
+     */
+    @SuppressWarnings("unused")
+    public static Beacon fromCursor(@NonNull Cursor cursor) {
         return Storage.fromCursor(cursor);
     }
 
@@ -117,6 +125,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         this(0);
     }
 
+    @NonNull
     @Override
     public String toString() {
         if(BuildConfig.DEBUG) {
@@ -161,6 +170,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
      * Saves the beacon and enables BLE advertising.
      * @return Same instance.
      */
+    @SuppressWarnings("unused")
     public Beacon save() {
         return save(true);
     }
@@ -205,9 +215,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         return setState(Beacon.ACTIVE_STATE_ENABLED, true);
     }
 
-    /**
-     * Stops the beacon and deletes it from storage.
-     */
+    /** Stops the beacon and deletes it from storage. */
     public void delete() {
         if (getActiveState() != ACTIVE_STATE_STOPPED) {
             setState(ACTIVE_STATE_STOPPED, false);
@@ -222,9 +230,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         setState(ACTIVE_STATE_PAUSED, true);
     }
 
-    /**
-     * Stops the beacon from advertising.
-     */
+    /** Stops the beacon from advertising. */
     public void stop() {
         // change state and save the new state if needed
         setState(ACTIVE_STATE_STOPPED, true);
@@ -312,6 +318,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
      * @return A non-persistent unique ID different than any other beacon.
      * The ID is not stable between service restarts and can easily collide.
      */
+    @SuppressWarnings("unused")
     public long getStableId() {
         return mStableId;
     }
@@ -369,8 +376,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
     public Advertiser recreateAdvertiser(BleService bleService) {
         mErrorCode = 0;
         mErrorDetsils = null;
-        mAdvertiser = createAdvertiser(bleService);
-        return mAdvertiser;
+        return (mAdvertiser = createAdvertiser(bleService));
     }
 
     protected abstract Advertiser createAdvertiser(BleService advertisersManager);
@@ -384,25 +390,42 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         return mName;
     }
 
-    /**
-     * Called by the service when Bluetooth enters disabled state. Never call this directly.
-     */
-    public long onBluetoothOff() {
+    /** Called by the service when Bluetooth enters disabled state. Never call this directly. */
+    public long onBluetoothDisabled(BleService bleService) {
+        cancelRefresh(bleService);
+
         long pduCount = 0;
         setAdvertiseState(ADVERTISE_NO_BLUETOOTH);
+
         if (null != mAdvertiser) {
             pduCount = mAdvertiser.clearPDUCount();
-        }
 
-        // do not attempt to re-use the same callback for future broadcasts
-        mAdvertiser = null;
+            // do not attempt to re-use the same callback for future broadcasts
+            mAdvertiser = null;
+        }
 
         return pduCount;
     }
 
+    public void onBluetoothEnabled(BleService service) {
+        if (ACTIVE_STATE_ENABLED == mActiveState) {
+            onAdvertiseEnabled(service);
+        } else {
+            // beacon was active but not enabled, aka PAUSED
+            setAdvertiseState(ADVERTISE_STOPPED);
+        }
+    }
+
+    public void cancelRefresh(BleService bleService) {
+        if(getScheduledRefreshElapsedTime() > 0) {
+            // cancel the scheduled beacon recreation
+            bleService.cancelAlarm(getAlarmPendingIntent(bleService));
+        }
+    }
+
     public void onAdvertiseFailed(int errorCode) {
         if (AdvertiseCallback.ADVERTISE_FAILED_TOO_MANY_ADVERTISERS == errorCode){
-            // user may attempt to start the beacon again when we get a free slot
+            // don't stop - we could attempt to start the beacon again if we free a slot
             pause();
         }
         else {
@@ -448,7 +471,9 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
      */
     public void onAdvertiseEnabled(BleService service) {
         // (re)create the beacon
-        service.startBeaconAdvertiser(this);
+        if (!service.startBeaconAdvertiser(this)) {
+            if(D) Log.e(TAG, "startBeaconAdvertiser failed");
+        }
     }
 
     public BaseEditor edit() {
@@ -484,12 +509,12 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
     }
 
     public class BaseEditor<T> {
-        protected boolean mRestartBeacon = false;
+        private boolean mNeedsRestart = false;
 
         public BaseEditor<T> setAdvertiseMode(@Advertiser.Mode int mode) {
             if (mode != mAdvertiseMode) {
                 mAdvertiseMode = mode;
-                mRestartBeacon = true;
+                setNeedsRestart();
             }
             return this;
         }
@@ -497,7 +522,7 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         public BaseEditor<T> setAdvertiseTxPower(@Advertiser.Power int txPowerLevel) {
             if (txPowerLevel != mTxPowerLevel) {
                 mTxPowerLevel = txPowerLevel;
-                mRestartBeacon = true;
+                setNeedsRestart();
             }
             return this;
         }
@@ -505,13 +530,13 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         public BaseEditor<T> setConnectable(boolean connectable) {
             if (connectable != mConnectable) {
                 mConnectable = connectable;
-                mRestartBeacon = true;
+                setNeedsRestart();
             }
             return this;
         }
 
         public BaseEditor<T> setName(String name) {
-            if (null == name || null == mName || !name.equals(mName)) {
+            if (null == name || !name.equals(mName)) {
                 mName = name;
             }
             return this;
@@ -520,13 +545,22 @@ public abstract class Beacon implements Advertiser.SettingsProvider {
         public BaseEditor<T> setFlags(int flags) {
             if (mFlags != flags) {
                 mFlags = flags;
-                mRestartBeacon = true;  // ?...
+                setNeedsRestart();  // ?...
             }
             return this;
         }
 
         public void apply() {
-            onEditDone(mRestartBeacon);
+            onEditDone(mNeedsRestart);
+        }
+
+        /**
+         * Indicates that the beacon should be restarted
+         * after the editor's changes are applied.
+         */
+        @SuppressWarnings("WeakerAccess")
+        protected void setNeedsRestart() {
+            mNeedsRestart = true;
         }
     }
 }
