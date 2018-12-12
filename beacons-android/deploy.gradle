@@ -43,12 +43,12 @@ if (ossrhUsername) uploadArchives {
                 version android.defaultConfig.versionName
 
                 description 'Android BLE beacons advertising library'
-                url 'https://github.com/uriio/beacons-android'
+                url 'https://github.com/adriancretu/beacons-android'
 
                 scm {
-                    connection 'scm:git:git@github.com:uriio/beacons-android.git'
-                    developerConnection 'scm:git:git@github.com:uriio/beacons-android.git'
-                    url 'git@github.com:uriio/beacons-android.git'
+                    connection 'scm:git:git@github.com:adriancretu/beacons-android.git'
+                    developerConnection 'scm:git:git@github.com:adriancretu/beacons-android.git'
+                    url 'git@github.com:adriancretu/beacons-android.git'
                 }
 
                 licenses {
